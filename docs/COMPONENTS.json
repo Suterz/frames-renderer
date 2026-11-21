@@ -1,0 +1,68 @@
+{
+  "date_recorded": "2026-11-21T14:28:58+01:00",
+  "comfy_commit": "a277b5bf213e8a44fa34817b7770b54f86ef4cea",
+  "comfy_version": "v0.46.0",
+  "repo_head_before_commit": "4886e053ca4e2f00ed3879fb2dcd479357a3fada",
+  "driver": "NVIDIA GeForce RTX 4090, 580.178.04, 24564 MiB",
+  "renderer_env": "{'fastapi': '0.165.0', 'pydantic': '2.14.4', 'pillow': '13.0.0', 'httpx': '0.28.1', 'uvicorn': '0.54.0'}",
+  "vision_env": "{'torch': '2.14.1+cu130', 'transformers': '5.24.0', 'torchvision': '0.29.1+cu130'}",
+  "inference_env": "{'torch': '2.14.1+cu130', 'comfyui-frontend-package': '1.59.6'}",
+  "ffmpeg": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+  "model_files": {
+    "hidream_full_comfy_bf16": {
+      "path": "/home/zelio-suter/ai/models/hidream/checkpoints/hidream_o1_image_bf16.safetensors",
+      "bytes": 16365209824,
+      "sha256": "0520134a47e5b2bacea25804b2a6021413eb95945344b5a953aa14170edff1aa"
+    },
+    "flux_klein_4b_bf16": {
+      "path": "/home/zelio-suter/ai/models/flux/flux-2-klein-4b.safetensors",
+      "bytes": 7751105712,
+      "sha256": "ec3d4e733a771f61c052fb4856c48b336c55eaf2c65487c2a1faeb9bbda7a343"
+    },
+    "flux_klein_text_encoder": {
+      "path": "/home/zelio-suter/ai/models/flux/split_files/text_encoders/qwen_3_4b.safetensors",
+      "bytes": 8044982048,
+      "sha256": "6c671498573ac2f7a5501502ccce8d2b08ea6ca2f661c458e708f36b36edfc5a"
+    },
+    "flux2_vae": {
+      "path": "/home/zelio-suter/ai/models/flux/split_files/vae/flux2-vae.safetensors",
+      "bytes": 336211292,
+      "sha256": "868fe7b343cc8f3a19dbcfcafbc3d5f888802be3f89bd81b65b3621a066ce8f3"
+    },
+    "piper_ljspeech_high": {
+      "path": "/home/zelio-suter/ai/voices/ljspeech-high/ljspeech.onnx",
+      "bytes": 114199011,
+      "sha256": "5d4f08ba6a2a48c44592eed3ce56bf85e9de3dd4e20df90541ae68a8310c029a"
+    },
+    "noto_bold": {
+      "path": "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf",
+      "bytes": 515752,
+      "sha256": "e83493c945848ecd4a9ad0f6d19164541a0d3e23a9c952304a00a46e00272ac5"
+    },
+    "dejavu_bold": {
+      "path": "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+      "bytes": 708920,
+      "sha256": "5c1247acef7f2b8522a31742c76d6adcb5569bacc0be7ceaa4dc39dd252ce895"
+    },
+    "qwen_vl_model-00001-of-00004": {
+      "path": "/home/zelio-suter/ai/models/vision/qwen3-vl-8b/model-00001-of-00004.safetensors",
+      "bytes": 4902275944,
+      "sha256": "d5d0aef0eb170fc7453a296c43c0849a56f510555d3588e4fd662bb35490aefa"
+    },
+    "qwen_vl_model-00002-of-00004": {
+      "path": "/home/zelio-suter/ai/models/vision/qwen3-vl-8b/model-00002-of-00004.safetensors",
+      "bytes": 4915962496,
+      "sha256": "8be88fb5501e4d5719a6d4cc212e6a13480330e74f3e8c77daa1a68f199106b5"
+    },
+    "qwen_vl_model-00003-of-00004": {
+      "path": "/home/zelio-suter/ai/models/vision/qwen3-vl-8b/model-00003-of-00004.safetensors",
+      "bytes": 4999831048,
+      "sha256": "83de00eafe6e0d57ccd009dbcf71c9974d74df2f016c27afb7e95aafd16b2192"
+    },
+    "qwen_vl_model-00004-of-00004": {
+      "path": "/home/zelio-suter/ai/models/vision/qwen3-vl-8b/model-00004-of-00004.safetensors",
+      "bytes": 2716270024,
+      "sha256": "0a88b98e9f96270973f567e6a2c103ede6ccdf915ca3075e21c755604d0377a5"
+    }
+  }
+}
