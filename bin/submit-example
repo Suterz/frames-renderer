@@ -1,3 +1,0 @@
-#!/usr/bin/env bash
-set -euo pipefail
-exec "$HOME/venvs/storyboard-renderer/bin/python" "$(dirname "$0")/submit-example.py" "$@"

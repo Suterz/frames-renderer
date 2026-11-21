@@ -1,0 +1,40 @@
+#!/usr/bin/env python3
+"""Use approved clean grounding as input to a fresh, phone-readable reveal."""
+import json
+import os
+import time
+from pathlib import Path
+
+import httpx
+
+base = os.environ.get("FRAME_URL", "http://127.0.0.1:8788")
+known = Path.home() / "Videos/frames-renderer/sessions/de2dbdb996cd499384aab64698171191"
+with httpx.Client(base_url=base, timeout=20) as h:
+    r = h.post("/v2/sessions", json=json.loads((known / "request.json").read_text()))
+    r.raise_for_status()
+    sid = r.json()["session_id"]
+
+    def wait(body):
+        r = h.post(f"/v2/sessions/{sid}/panels", json=body)
+        r.raise_for_status()
+        d = r.json()
+        print("submitted", d["status_url"], flush=True)
+        deadline = time.monotonic() + 900
+        while d["state"] in ("queued", "running") and time.monotonic() < deadline:
+            time.sleep(2)
+            r = h.get(d["status_url"])
+            r.raise_for_status()
+            d = r.json()
+        print(json.dumps(d), flush=True)
+        return d
+
+    for n, old in enumerate(("6102150c1b4d4a06b2501af35fe32843", "f0cea49a86a24767b094beada6f16206")):
+        opening = json.loads((known / "panels" / old / "request.json").read_text())
+        overlay, checks = opening.pop("overlays"), opening.pop("composed_checks")
+        a = wait(opening)
+        if a["state"] != "accepted":
+            continue
+        wait({"key": f"focus-{n}", "op": "focus", "scene_id": opening["scene_id"], "parent_panel_id": a["panel_id"],
+              "objective": opening["objective"], "instruction": "Zoom the verified target for phone clarity.",
+              "focus": {"anchor": "tag.knot", "zoom": 2.3}, "overlays": overlay, "composed_checks": checks,
+              "retry_budget": 0})

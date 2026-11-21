@@ -3,9 +3,9 @@ requires = ["setuptools>=75"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "storyboard-renderer"
-version = "0.1.0"
-description = "Local storyboard-to-cartoon renderer"
+name = "frames-renderer"
+version = "0.2.0"
+description = "Local illustration and educational panel renderer"
 requires-python = ">=3.12"
 dependencies = ["fastapi>=0.115", "uvicorn>=0.30", "httpx>=0.27", "pydantic>=2.9", "python-multipart>=0.0.12", "pillow>=11"]
 

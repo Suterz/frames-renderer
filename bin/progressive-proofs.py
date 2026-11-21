@@ -8,7 +8,7 @@ from storyboard_renderer.backends.comfy import ComfyBackend
 from storyboard_renderer.compose import compose
 from storyboard_renderer.grounding import NeedsReview, resolve
 from storyboard_renderer.schema import Overlay
-from storyboard_renderer.runner import sha
+from storyboard_renderer.frame_engine import sha
 from storyboard_renderer.signature import art_only
 
 profile=sys.argv[1] if len(sys.argv)>1 else "flux"

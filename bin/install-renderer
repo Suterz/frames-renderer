@@ -2,8 +2,8 @@
 set -euo pipefail
 export PATH="$HOME/.local/bin:$PATH"
 cd "$(dirname "$0")/.."
-if [ ! -x "$HOME/venvs/storyboard-renderer/bin/python" ]; then
-  uv venv "$HOME/venvs/storyboard-renderer" --python /usr/bin/python3
+if [ ! -x "$HOME/venvs/frames-renderer/bin/python" ]; then
+  uv venv "$HOME/venvs/frames-renderer" --python /usr/bin/python3
 fi
-uv pip install --python "$HOME/venvs/storyboard-renderer/bin/python" -e '.[test]'
-echo "Renderer installed in isolated venv; ./bin/start-renderer"
+uv pip install --python "$HOME/venvs/frames-renderer/bin/python" '.[test]'
+echo "Frame renderer installed in isolated venv; ./bin/start-frame-renderer"

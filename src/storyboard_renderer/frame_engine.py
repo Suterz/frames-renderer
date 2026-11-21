@@ -91,6 +91,18 @@ def geometry(req, anchors, size, alpha):
     return evidence
 
 
+def focus_crop(clean_ref, clean_out, anchor, zoom, size):
+    """Crop in canvas space around an accepted named anchor, not a hand-selected pixel."""
+    w,h = size
+    x,y = anchor
+    cw,ch = round(w/zoom),round(h/zoom)
+    l,t = min(max(0, x-cw//2), w-cw), min(max(0, y-ch//2), h-ch)
+    box = (l,t,l+cw,t+ch)
+    with Image.open(clean_ref) as img:
+        img.convert("RGB").resize(size,Image.Resampling.LANCZOS).crop(box).resize(size,Image.Resampling.LANCZOS).save(clean_out)
+    return box
+
+
 def run(root, session, job, backend):
     s = json.loads((session / "request.json").read_text())
     req = json.loads((job / "request.json").read_text())
@@ -106,6 +118,9 @@ def run(root, session, job, backend):
     art = art_only(s["visual_signature"])
     layout = req["layout"]
     feedback = ""
+    repair_index = 0
+    last_composition_source = None
+    active_overlays = req["overlays"]
     LEASE.parent.mkdir(parents=True, exist_ok=True)
     with LEASE.open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
@@ -118,7 +133,13 @@ def run(root, session, job, backend):
             overlay, phone = attempt / "overlay.png", attempt / "phone.png"
             stage = "art"
             try:
-                if layout:
+                recompose_only = last_composition_source is not None
+                if recompose_only:
+                    old_clean, old_anchors = last_composition_source
+                    shutil.copyfile(old_clean, clean)
+                    anchors = old_anchors.copy()
+                    proof["reused_clean_for_repair"] = sha(clean)
+                elif layout:
                     keys = [layout["asset"]] if "asset" in layout else [row["asset"] for row in layout["layers"]]
                     sprites, positions = {}, {}
                     for key in dict.fromkeys(keys):
@@ -164,9 +185,34 @@ def run(root, session, job, backend):
                 elif req["op"] == "overlay_only":
                     shutil.copyfile(ref, clean)
                     anchors = dict(previous["anchors"])
+                elif req["op"] == "focus":
+                    spec = req["focus"]
+                    key = spec["anchor"]
+                    if key not in previous["anchors"]:
+                        raise NeedsReview(f"no verified parent anchor for crop: {key}")
+                    x0,y0,x1,y1 = focus_crop(ref, clean, previous["anchors"][key]["point"], spec["zoom"], size)
+                    anchors = {}
+                    for name, val in previous["anchors"].items():
+                        x,y = val["point"]
+                        if x0 <= x < x1 and y0 <= y < y1:
+                            points = [round((x-x0)*size[0]/(x1-x0)),round((y-y0)*size[1]/(y1-y0))]
+                            b = val["box"]
+                            bounds = [round((min(max(a,l),hi)-l)*d/(hi-l)) for a,l,hi,d in
+                                      zip(b,[x0,y0]*2,[x1,y1]*2,size*2)]
+                            anchors[name] = {**val, "point": points, "box": bounds, "crop_from": val["point"],
+                                             "method": "composition crop of previously accepted anchor", "source_hash": sha(clean)}
+                    proof["focus_canvas_crop"] = [x0,y0,x1,y1]
                 else:
                     prompt = (f"{art}\nStory context: {s['story_context']}\n{req['instruction']}\n"
                               f"Change: {req['change']}. Preserve: {req['keep']}. No written words, numbers, or annotations.")
+                    if s["legacy_input"] and s.get("legacy_premise"):
+                        prompt = f"{art}\nStory: {s['legacy_premise']}. {s['legacy_context']}\n"
+                        if not ref:
+                            prompt += f"NEW COMPOSITION: {req['instruction']}. {req['keep']}. No baked captions, price numerals, labels or words."
+                        else:
+                            prompt += (f"Edit the provided illustration. Desired result: {req['instruction']}. Specific requested change: "
+                                       f"{req['change']}. Preserve: {req['keep']}. Keep the composition, character identity and every "
+                                       "unspecified object stable. No baked captions or text.")
                     if feedback:
                         prompt += f"\nCorrect these specific defects: {feedback[:700]}"
                     native = (864, 1536) if backend.profile == "flux" else (1440, 2560)
@@ -181,7 +227,7 @@ def run(root, session, job, backend):
                 images.append(("New candidate to judge", str(clean)))
                 checks = req["clean_checks"]
                 queries = [simple_query([images[-1]], c["question"]) for c in checks]
-                rubric = not s["legacy_input"] and req["op"] != "overlay_only"
+                rubric = not s["legacy_input"] and req["op"] not in ("overlay_only", "focus")
                 if rubric:
                     queries.append({"images": images, "prompt":
                         f"Teaching objective: {req['objective']}\nImage instruction: "
@@ -192,7 +238,7 @@ def run(root, session, job, backend):
                         "Do not penalize absence of text to be drawn later. Return only JSON: "
                         '{"observations":"specific visible evidence","defects":[{"kind":"style|continuity|subject|spurious|layout","detail":"specific visible teaching defect"}]}. '
                         "Use an empty defects list if no material defect."})
-                if queries:
+                if queries and not recompose_only:
                     backend.free()
                     proof["pass_a"] = records = evaluate(queries)
                     failures = check_answers(records[:len(checks)], checks)
@@ -204,7 +250,7 @@ def run(root, session, job, backend):
                     if failures:
                         raise NeedsReview("; ".join(failures))
                 stage = "grounding"
-                if req["anchors"]:
+                if req["anchors"] and not recompose_only:
                     backend.free()
                     w, h = Image.open(clean).size
                     for name, spec in req["anchors"].items():
@@ -221,10 +267,12 @@ def run(root, session, job, backend):
                         if isinstance(spec, dict):
                             anchors[name] = derive_edge(anchors[spec["of"]], anchors[spec["toward"]], spec["of"], spec["toward"])
                 stage = "composition"
-                overlays = [Overlay.model_validate(o) for o in req["overlays"]]
+                overlays = [Overlay.model_validate(o) for o in active_overlays]
+                last_composition_source = (clean, anchors.copy())
+                proof["overlays"] = active_overlays
                 compose(clean, overlays, "", s["values"], anchors, size, composed, overlay)
                 with Image.open(overlay) as rgba:
-                    proof["geometry"] = geometry(req, anchors, size, rgba.getchannel("A"))
+                    proof["geometry"] = geometry({**req, "overlays": active_overlays}, anchors, size, rgba.getchannel("A"))
                 with Image.open(composed) as img:
                     img.resize((360, 640), Image.Resampling.LANCZOS).save(phone)
                 stage = "composed_review"
@@ -249,10 +297,16 @@ def run(root, session, job, backend):
                     if path.exists():
                         shutil.copyfile(path, job / path.name)
                 atomic(job / "review.json", report)
+                options = req.get("overlay_repairs", [])
+                if stage in ("composition", "composed_review") and repair_index < len(options):
+                    active_overlays = options[repair_index]
+                    repair_index += 1
+                    continue
+                last_composition_source = None
                 if req["fallback_layout"] and not layout:
                     layout = req["fallback_layout"]
                     continue
-                if req["op"] == "overlay_only" and not req["anchors"]:
+                if req["op"] == "overlay_only" and not req["anchors"] and not req.get("overlay_repairs"):
                     break
             finally:
                 backend.free()

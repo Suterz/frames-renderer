@@ -73,6 +73,8 @@ def _ask(image: Path, description: str) -> tuple[dict, str, float]:
 def resolve(image: Path, name: str, description: str, evidence_dir: Path, *, verify: bool = True) -> dict:
     evidence_dir.mkdir(parents=True, exist_ok=True)
     answer, raw, whole_seconds = _ask(image, description)
+    stem = name.replace('.', '_')
+    (evidence_dir / f"{stem}_whole.json").write_text(json.dumps({"query": description, "raw": raw, "parsed": answer}))
     with Image.open(image) as source:
         w, h = source.size
         point = (round(answer["point_2d"][0]*w/1000), round(answer["point_2d"][1]*h/1000))
@@ -87,6 +89,10 @@ def resolve(image: Path, name: str, description: str, evidence_dir: Path, *, ver
             alternate, alt_raw, crop_seconds = _ask(crop_path, description)
             cw,ch = region[2]-region[0], region[3]-region[1]
             second = (region[0]+round(alternate["point_2d"][0]*cw/1000),region[1]+round(alternate["point_2d"][1]*ch/1000))
+            (evidence_dir / f"{stem}_comparison.json").write_text(json.dumps({
+                "query": description, "whole_point": point, "whole_box": box, "crop_region": region,
+                "mapped_crop_point": second, "crop_model_response": alt_raw,
+            }))
             # Same model is not independent semantic verification; agreement is only a sanity check.
             if abs(second[0]-point[0]) > max(22, w*.045) or abs(second[1]-point[1]) > max(22,h*.045):
                 raise NeedsReview(f"{name}: crop and whole-image points disagree {point} vs {second}")

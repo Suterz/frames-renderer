@@ -43,6 +43,8 @@ class Session(Strict):
     values: dict[str, str | int] = Field(default_factory=dict)
     checks: list[dict[str, str]] = Field(default_factory=list)
     legacy_input: bool = False
+    legacy_premise: str = ""
+    legacy_context: str = ""
 
     @model_validator(mode="after")
     def validate_session(self):
@@ -73,9 +75,14 @@ class Link(Strict):
     to: str
 
 
+class Focus(Strict):
+    anchor: str
+    zoom: float = Field(ge=1.25, le=5)
+
+
 class Panel(Strict):
     key: str = Field(pattern=KEY.pattern)
-    op: Literal["new_scene", "edit_scene", "overlay_only"]
+    op: Literal["new_scene", "edit_scene", "overlay_only", "focus"]
     scene_id: str = Field(pattern=KEY.pattern)
     parent_panel_id: str | None = None
     revision_of: str | None = None
@@ -86,18 +93,22 @@ class Panel(Strict):
     seed: int = 42
     anchors: dict[str, str | DerivedAnchor] = Field(default_factory=dict)
     overlays: list[Overlay] = Field(default_factory=list, max_length=40)
+    overlay_repairs: list[list[Overlay]] = Field(default_factory=list, max_length=4)
     layout: dict | None = None
     fallback_layout: dict | None = None
     clean_checks: list[Observation] = Field(default_factory=list, max_length=6)
     composed_checks: list[Observation] = Field(default_factory=list, max_length=6)
     expected_links: list[Link] | None = None
     clear_of: list[str] = Field(default_factory=list)
+    focus: Focus | None = None
     retry_budget: int = Field(default=2, ge=0, le=4)
 
     @model_validator(mode="after")
     def validate_panel(self):
         if (self.op == "new_scene") == bool(self.parent_panel_id):
             raise ValueError("new_scene forbids a parent; edits/reveals require one")
+        if (self.op == "focus") != bool(self.focus):
+            raise ValueError("focus requires a focus specification on the focus operation only")
         if any(not KEY.fullmatch(k) for k in self.anchors):
             raise ValueError("unsafe anchor name")
         if (self.layout or self.fallback_layout) and self.op != "new_scene":
@@ -163,6 +174,10 @@ def health():
 @app.get("/ready")
 def ready():
     try:
+        vision_model = Path.home() / "ai/models/vision/qwen3-vl-8b/model.safetensors.index.json"
+        vision_python = Path(os.environ.get("STORY_VISION_PYTHON", Path.home() / "venvs/storyboard-vision/bin/python"))
+        if not vision_model.is_file() or not vision_python.is_file():
+            raise RuntimeError("local vision checkpoint or environment missing")
         ComfyBackend(COMFY, PROFILE).ready()
     except Exception as exc:
         raise HTTPException(503, f"ComfyUI: {exc}") from exc
