@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export PATH="$HOME/.local/bin:$PATH"
+export HF_HOME="$HOME/ai/hf-cache"
+mkdir -p "$HOME/ai/models/vision" "$HOME/venvs"
+if [ ! -x "$HOME/venvs/storyboard-vision/bin/python" ]; then
+  uv venv "$HOME/venvs/storyboard-vision" --python /usr/bin/python3
+fi
+uv pip install --python "$HOME/venvs/storyboard-vision/bin/python" torch torchvision --index-url https://download.pytorch.org/whl/cu130/
+uv pip install --python "$HOME/venvs/storyboard-vision/bin/python" 'transformers>=4.57,<6' accelerate pillow qwen-vl-utils huggingface_hub hf_xet
+"$HOME/venvs/storyboard-vision/bin/hf" download Qwen/Qwen3-VL-8B-Instruct --revision 0c351dd01ed87e9c1b53cbc748cba10e6187ff3b --local-dir "$HOME/ai/models/vision/qwen3-vl-8b"
+echo "External local grounding model ready"

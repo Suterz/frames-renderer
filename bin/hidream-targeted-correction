@@ -1,0 +1,26 @@
+#!/usr/bin/env python3
+"""One bounded recovery shot for HiDream Full after its first composition omitted Mara."""
+from pathlib import Path
+import json
+from storyboard_renderer.backends.comfy import ComfyBackend
+from storyboard_renderer.signature import art_only
+
+out=Path.home()/"Videos/storyboard-renderer/comparison/hidream-correction"
+out.mkdir(parents=True,exist_ok=True)
+signature=art_only(Path("examples/unit-price/signature.md").read_text())
+brief=(
+    "Vertical editorial cartoon featuring a VISIBLE PERSON. Mara is a friendly human woman "
+    "from the waist up in the UPPER HALF, directly facing the viewer, with eyebrows, eyes, nose, "
+    "mouth and both hands clearly visible. She wears a deep plum apron. In front of her hands "
+    "in the LOWER CENTER sits exactly ONE large ochre paper grocery bag, broad flat side facing us. "
+    "The outside of the paper bag is PLAIN WITHOUT FRUIT PRINTS or decorative images; no orange drawings. "
+    "Attach ONE relatively small blank ivory price tag with a short teal bow to the top right corner "
+    "of that SAME bag. No second bag. Character and bag must both be prominent. "
+    "No frame border, decorative text, decorative arrows, background scratches or fruit outside the bag."
+)
+(out/"brief.txt").write_text(brief)
+backend=ComfyBackend("http://127.0.0.1:8188","hidream")
+backend.free()
+result=backend.render(signature+"\n"+brief,864,1536,73,out/"recovery-opening.png")
+(out/"result.json").write_text(json.dumps(result,indent=2))
+print("TARGETED_RECOVERY",out/"recovery-opening.png")

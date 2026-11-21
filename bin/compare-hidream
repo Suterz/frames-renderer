@@ -1,0 +1,43 @@
+#!/usr/bin/env python3
+"""Bounded matched storyboard pair, no server bypass for production acceptance."""
+import json
+import subprocess
+import threading
+import time
+from pathlib import Path
+from storyboard_renderer.backends.comfy import ComfyBackend
+from storyboard_renderer.signature import art_only
+
+story=json.loads(Path("examples/unit-price/story.json").read_text())
+signature=art_only(Path("examples/unit-price/signature.md").read_text())
+out=Path.home()/"Videos/storyboard-renderer/comparison/hidream-clean-unit"
+out.mkdir(parents=True,exist_ok=True)
+profile="hidream"
+backend=ComfyBackend("http://127.0.0.1:8188",profile)
+backend.free()
+peak=[0]
+running=[True]
+def sample():
+    while running[0]:
+        try:
+            val=subprocess.check_output(["nvidia-smi","--query-gpu=memory.used","--format=csv,noheader,nounits"],text=True,timeout=8)
+            peak[0]=max(peak[0],int(val.splitlines()[0].strip()))
+        except Exception:pass
+        time.sleep(.75)
+t=threading.Thread(target=sample,daemon=True);t.start()
+manifest={"profile":profile,"size":[864,1536],"peak_vram_mib":None,"results":[]}
+try:
+    p1,p3=story["panels"][0],story["panels"][2]
+    first=out/"P01.png"
+    prompt=f"{signature}\nStory: {story['premise']}. {story['context']}\nNEW COMPOSITION: {p1['visual']}. {p1['keep']}. No baked captions, price numerals, labels or words."
+    manifest["results"].append(backend.render(prompt,864,1536,p1["seed"],first))
+    (out/"comparison.json").write_text(json.dumps(manifest,indent=2))
+    second=out/"P03.png"
+    edit=f"{signature}\nStory: {story['premise']}. {story['context']}\nEdit the provided illustration. Desired result: {p3['visual']}. Specific requested change: {p3['change']}. Preserve: {p3['keep']}. Keep the composition, character identity and every unspecified object stable. No baked captions or text."
+    manifest["results"].append(backend.render(edit,864,1536,p3["seed"],second,first))
+finally:
+    running[0]=False
+    t.join(timeout=2)
+    manifest["peak_vram_mib"]=peak[0]
+    (out/"comparison.json").write_text(json.dumps(manifest,indent=2))
+print(f"COMPARED {out} peak_vram_mib={peak[0]}",flush=True)

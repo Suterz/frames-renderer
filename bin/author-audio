@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+set -euo pipefail
+exec "$HOME/venvs/storyboard-voice/bin/python" "$(dirname "$0")/author-audio.py" "$@"

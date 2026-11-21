@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export PATH="$HOME/.local/bin:$PATH"
+mkdir -p "$HOME/ai/voices/ljspeech-high" "$HOME/venvs"
+if [ ! -x "$HOME/venvs/storyboard-voice/bin/python" ]; then
+  uv venv "$HOME/venvs/storyboard-voice" --python /usr/bin/python3
+fi
+uv pip install --python "$HOME/venvs/storyboard-voice/bin/python" 'piper-tts[alignment]'
+curl -fLsS --retry 3 -o "$HOME/ai/voices/ljspeech-high/ljspeech.onnx" https://sfo3.digitaloceanspaces.com/bkmdls/ljspeech.onnx
+curl -fLsS --retry 3 -o "$HOME/ai/voices/ljspeech-high/ljspeech.onnx.json" https://sfo3.digitaloceanspaces.com/bkmdls/ljspeech.onnx.json
+echo "External authoring voice ready; the renderer consumes uploaded WAVs"

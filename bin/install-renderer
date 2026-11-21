@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export PATH="$HOME/.local/bin:$PATH"
+cd "$(dirname "$0")/.."
+if [ ! -x "$HOME/venvs/storyboard-renderer/bin/python" ]; then
+  uv venv "$HOME/venvs/storyboard-renderer" --python /usr/bin/python3
+fi
+uv pip install --python "$HOME/venvs/storyboard-renderer/bin/python" -e '.[test]'
+echo "Renderer installed in isolated venv; ./bin/start-renderer"

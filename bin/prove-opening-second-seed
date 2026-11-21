@@ -1,0 +1,55 @@
+#!/usr/bin/env python3
+"""Second composition for part-level grounding; logs source point and distractor crossing."""
+from pathlib import Path
+import json
+import traceback
+from PIL import Image
+from storyboard_renderer.backends.comfy import ComfyBackend
+from storyboard_renderer.compose import compose
+from storyboard_renderer.grounding import NeedsReview, resolve
+from storyboard_renderer.schema import Overlay
+from storyboard_renderer.signature import art_only
+
+out=Path.home()/"Videos/storyboard-renderer/progressive/level-3-opening-second-seed"
+out.mkdir(parents=True,exist_ok=True)
+signature=art_only(Path("examples/unit-price/signature.md").read_text())
+backend=ComfyBackend("http://127.0.0.1:8188","flux")
+seed=918
+instruction=("An open basket on the RIGHT, its dark clearly visible EMPTY top opening unobstructed. "
+             "ONE red apple on the UPPER LEFT at the basket opening's height. "
+             "A yellow pear well BELOW the apple in the LOWER LEFT, clearly not overlapping the apple or "
+             "the direct open space between apple and basket. Clean ivory negative space between the three distinct objects. "
+             "No lettering, numbers, arrows or extra fruit.")
+request={"prompt":instruction,"signature":signature,"seed":seed,"failure_criteria":["apple not red","opening not visible","pear occludes arrow path","uncertain image or crop point"]}
+(out/"input.json").write_text(json.dumps(request,indent=2))
+clean=out/"clean.png"
+evidence={"seed":seed,"status":"running"}
+try:
+    evidence["backend"]=backend.render(signature+"\n"+instruction,864,1536,seed,clean)
+    backend.free()
+    queries={"apple.center":"center of the ONE red apple near the upper left",
+             "pear.center":"center of the yellow pear at the lower left; not the red apple",
+             "basket.opening":"a point INSIDE the dark EMPTY interior opening of the wicker basket at right, not the front rim or handle"}
+    obs={}
+    for name,q in queries.items():obs[name]=resolve(clean,name,q,out/"grounding")
+    im=Image.open(clean).convert("RGB")
+    pt=obs["apple.center"]["point"]
+    r,g,b=im.getpixel(tuple(pt))
+    if not(r>g+45 and r>b+30):raise NeedsReview(f"apple point does not sample red fruit: {(r,g,b)}")
+    a=obs["apple.center"]["point"];z=obs["basket.opening"]["point"]
+    box=obs["pear.center"]["box"]
+    crosses=any(box[0]-8<=a[0]+(z[0]-a[0])*t/100<=box[2]+8 and
+                box[1]-8<=a[1]+(z[1]-a[1])*t/100<=box[3]+8 for t in range(8,95))
+    if crosses:raise NeedsReview("straight arrow route crosses the distinct pear distractor")
+    sx,sy=1080/im.width,1920/im.height
+    for entry in obs.values():
+        entry["source_point"]=entry["point"]
+        entry["point"]=(round(entry["point"][0]*sx),round(entry["point"][1]*sy))
+        entry["box"]=tuple(round(n*(sx if i%2==0 else sy)) for i,n in enumerate(entry["box"]))
+    compose(clean,[Overlay(type="arrow",**{"from":"apple.center","to":"basket.opening"})],"",{},obs,(1080,1920),out/"arrow.png",out/"overlay.png")
+    evidence.update(status="machine_passed",apple_rgb=[r,g,b],straight_route_crosses_pear=False,anchors=obs)
+except Exception as exc:
+    evidence.update(status="needs_review",error=f"{type(exc).__name__}: {exc}")
+    traceback.print_exc()
+(out/"result.json").write_text(json.dumps(evidence,indent=2,default=str))
+print(evidence["status"],evidence.get("error",""),flush=True)

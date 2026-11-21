@@ -1,0 +1,60 @@
+#!/usr/bin/env python3
+"""Machine-verifiable source-pixel, scene-order and encoded-media acceptance."""
+import json
+import sys
+from pathlib import Path
+from PIL import Image,ImageChops
+
+job=Path(sys.argv[1]).resolve()
+manifest=json.loads((job/"manifest.json").read_text())
+request=json.loads((job/"request.json").read_text())
+panels=manifest["panels"]
+report={"job":str(job),"story_id":request["story_id"],"checks":[]}
+for i,entry in enumerate(panels):
+    name=entry["id"]
+    original=next(p for p in request["panels"] if p["id"]==name)
+    if original["op"]=="overlay_only":
+        previous=panels[i-1]
+        assert entry["clean_hash"]==previous["clean_hash"],name+": clean source changed on overlay_only"
+        # Union of prior and current overlay alpha: handles removal as well as addition.
+        with Image.open(previous["composed"]) as a, Image.open(entry["composed"]) as b,\
+             Image.open(job/"overlays"/f"{previous['id']}.png") as pa,\
+             Image.open(job/"overlays"/f"{name}.png") as pb:
+            old=a.convert("RGB");new=b.convert("RGB")
+            diff=ImageChops.difference(old,new).convert("L")
+            oldalpha=pa.getchannel("A").point(lambda n:255 if n else 0)
+            newalpha=pb.getchannel("A").point(lambda n:255 if n else 0)
+            union=ImageChops.lighter(oldalpha,newalpha)
+            inv=union.point(lambda n:0 if n else 255)
+            outside=ImageChops.multiply(diff,inv)
+            assert outside.getbbox() is None,name+": non-overlay source pixels changed"
+            assert diff.getbbox() is not None,name+": requested overlay change not visible"
+        report["checks"].append({"panel":name,"type":"overlay_only","clean_pixel_hash_identical":True,"outside_layer_changed_pixels":0})
+    if original.get("layout"):
+        layout=original["layout"]
+        if "layers" in layout:
+            expected=[layer["id"]+".center" for layer in layout["layers"]]
+            assert all(key in entry["anchors"] for key in expected)
+            assert len({tuple(entry["anchors"][key]["point"]) for key in expected})==len(expected)
+            report["checks"].append({"panel":name,"type":"controlled_layers","instances":expected})
+        else:
+            count=layout["count"]
+            if isinstance(count,str):count=request["values"][count]
+            visible=[key for key in entry["anchors"] if key.endswith(".center")]
+            assert len(visible)==count
+            assert len({tuple(entry["anchors"][key]["point"]) for key in visible})==count
+            report["checks"].append({"panel":name,"type":"controlled_count","instances":count})
+streams=manifest["verification"]["ffprobe"]["streams"]
+video=next(s for s in streams if s["codec_type"]=="video")
+audio=next(s for s in streams if s["codec_type"]=="audio")
+assert video["codec_name"]=="h264" and audio["codec_name"]=="aac"
+assert (video["width"],video["height"])==(request["output"]["width"],request["output"]["height"])
+assert float(manifest["verification"]["ffprobe"]["format"]["duration"])<45
+assert int(video["nb_read_frames"])==manifest["verification"]["expected_video_frames"]
+assert (job/"video.mp4").is_file()
+report["checks"].append({"type":"media","video_frames":int(video["nb_read_frames"]),
+                         "duration":manifest["verification"]["ffprobe"]["format"]["duration"],"audio_codec":"aac"})
+path=job/"verification"/"acceptance.json"
+path.parent.mkdir(exist_ok=True)
+path.write_text(json.dumps(report,indent=2)+"\n")
+print(json.dumps(report,indent=2))

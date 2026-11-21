@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export HF_HUB_OFFLINE=1
+export TRANSFORMERS_OFFLINE=1
+export STORY_PROFILE="${STORY_PROFILE:-flux}"
+export STORY_FFMPEG="${STORY_FFMPEG:-$HOME/ai/tools/media/bin/ffmpeg}"
+export STORY_FFPROBE="${STORY_FFPROBE:-$HOME/ai/tools/media/bin/ffprobe}"
+exec "$HOME/venvs/storyboard-renderer/bin/uvicorn" storyboard_renderer.api:app --host 127.0.0.1 --port 8787 --workers 1
