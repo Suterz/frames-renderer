@@ -277,7 +277,8 @@ def run(root, session, job, backend):
                 overlays = [Overlay.model_validate(o) for o in active_overlays]
                 last_composition_source = (clean, anchors.copy())
                 proof["overlays"] = active_overlays
-                compose(clean, overlays, "", s["values"], anchors, size, composed, overlay)
+                compose(clean, overlays, "", s["values"], anchors, size, composed, overlay,
+                        theme=s.get("graphic_theme"))
                 with Image.open(overlay) as rgba:
                     proof["geometry"] = geometry({**req, "overlays": active_overlays}, anchors, size, rgba.getchannel("A"))
                 with Image.open(composed) as img:

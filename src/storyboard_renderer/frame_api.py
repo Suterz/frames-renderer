@@ -43,6 +43,7 @@ class Session(Strict):
     values: dict[str, str | int] = Field(default_factory=dict)
     checks: list[dict[str, str]] = Field(default_factory=list)
     legacy_input: bool = False
+    graphic_theme: Literal["paper","atlas"] | None = None
     legacy_premise: str = ""
     legacy_context: str = ""
 

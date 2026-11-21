@@ -157,14 +157,51 @@ def point_of(value, anchors, size):
     raise NeedsReview(f"missing or invalid anchor {value}")
 
 
-def compose(clean_path: Path, overlays: list, caption: str, values: dict, anchors: dict, size: tuple[int,int], out: Path, overlay_out: Path):
+GRAPHIC_THEMES = {
+    "paper": {"ink":"#482536","accent":"#bf4d31","pale":"#f4ddac","paper":"#fff8ea"},
+    "atlas": {"ink":"#173555","accent":"#b74636","pale":"#bddbea","paper":"#edf6f8"},
+}
+
+
+def compose(clean_path: Path, overlays: list, caption: str, values: dict, anchors: dict, size: tuple[int,int], out: Path, overlay_out: Path, *, theme=None):
     image=Image.open(clean_path).convert("RGB").resize(size,Image.Resampling.LANCZOS)
     layer=Image.new("RGBA",size,(0,0,0,0))
     draw=ImageDraw.Draw(layer)
     w,h=size
+    palette=GRAPHIC_THEMES.get(theme, GRAPHIC_THEMES["paper"])
     for item in overlays:
         kind=item.type
-        if kind in ("text","label"):
+        if kind=="segment":
+            a=point_of(item.source,anchors,size)
+            b=point_of(item.to,anchors,size)
+            dx,dy=b[0]-a[0],b[1]-a[1]
+            length=math.hypot(dx,dy)
+            d=item.divisions
+            if length < w*.026 or (d and length/d < w*.023):
+                raise NeedsReview("segment or tick spacing is too small at phone size")
+            half_tick=round(w*.018)
+            width=max(2,round(w*.008))
+            gap=half_tick+width
+            if any(not gap<=x<w-gap or not gap<=y<h-gap for x,y in (a,b)):
+                raise NeedsReview("segment outside safe bounds")
+            color=palette[item.ink]
+            draw.line((a,b),fill=color,width=width)
+            if d:
+                tx,ty=-dy/length*half_tick,dx/length*half_tick
+                for i in range(d+1):
+                    x,y=a[0]+dx*i/d,a[1]+dy*i/d
+                    draw.line([(round(x-tx),round(y-ty)),(round(x+tx),round(y+ty))],fill=color,width=width)
+        elif kind=="shape":
+            cx,cy=point_of(item.at,anchors,size)
+            rx,ry=item.extent[0]*w/2,item.extent[1]*h/2
+            box=(round(cx-rx),round(cy-ry),round(cx+rx),round(cy+ry))
+            if box[0]<1 or box[1]<1 or box[2]>=w-1 or box[3]>=h-1:
+                raise NeedsReview("shape outside safe bounds")
+            if min(box[2]-box[0],box[3]-box[1])<w*.008:
+                raise NeedsReview("shape is too small at phone size")
+            draw_fn=draw.ellipse if item.shape=="disc" else draw.rectangle
+            draw_fn(box,fill=palette[item.ink])
+        elif kind in ("text","label"):
             text=approved_text(item.text or "",values)
             if not text:raise NeedsReview("empty instructional text")
             at=item.at
@@ -182,8 +219,10 @@ def compose(clean_path: Path, overlays: list, caption: str, values: dict, anchor
                 else: raise NeedsReview(f"text does not fit {at}")
             else:
                 center=point_of(at,anchors,size)
-                max_pt=max(28,round(w*.048))
-                for pt in range(max_pt,27,-2):
+                preference={None:.048,"question":.060,"support":.041,"value":.063}
+                min_pt=max(12,round(w*.028)) if item.role else 28
+                max_pt=max(min_pt,round(w*preference[item.role]))
+                for pt in range(max_pt,min_pt-1,-1):
                     font=font_for(text,pt)
                     if draw.textlength(text,font=font)<=w*.82:
                         break
@@ -192,7 +231,18 @@ def compose(clean_path: Path, overlays: list, caption: str, values: dict, anchor
             bounds=draw.textbbox(center,text,font=font,anchor="mm")
             if bounds[0]<w*.06 or bounds[2]>w*.94 or bounds[1]<h*.04 or bounds[3]>h*.84:
                 raise NeedsReview(f"text '{text}' outside safe visual region")
-            if not (isinstance(at,str) and at.endswith(".face")):
+            if item.role and not (isinstance(at,str) and at.endswith(".face")):
+                p=max(4,round(w*.010))
+                q=max(3,round(w*.007))
+                bg=palette["ink"] if item.role=="question" else palette["paper"]
+                fg=palette["paper"] if item.role=="question" else palette["ink"]
+                draw.rounded_rectangle((bounds[0]-p,bounds[1]-q,bounds[2]+p,bounds[3]+q),
+                                       radius=max(2,p//2),fill=bg)
+                draw.text(center,text,fill=fg,font=font,anchor="mm")
+                if item.role=="value":
+                    line_y=bounds[3]+q-1
+                    draw.line((bounds[0],line_y,bounds[2],line_y),fill=palette["accent"],width=max(2,q//2))
+            elif not (isinstance(at,str) and at.endswith(".face")):
                 draw.rounded_rectangle((bounds[0]-15,bounds[1]-12,bounds[2]+15,bounds[3]+12),radius=12,fill="#302337")
                 draw.text(center,text,fill="#FFF3DB",font=font,anchor="mm")
             else:draw.text(center,text,fill="#302337",stroke_width=1,font=font,anchor="mm")

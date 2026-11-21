@@ -25,11 +25,24 @@ class Cue(BaseModel):
 
 
 class Overlay(BaseModel):
-    type: Literal["text", "arrow", "marker", "label"]
+    type: Literal["text", "arrow", "marker", "label", "segment", "shape"]
     text: str | None = None
     at: str | list[float] | None = None
     source: str | list[float] | None = Field(default=None, alias="from")
     to: str | list[float] | None = None
+    divisions: int | None = Field(default=None, ge=1, le=32)
+    shape: Literal["rect","disc"] | None = None
+    extent: tuple[float,float] | None = None
+    ink: Literal["ink","accent","pale"] = "ink"
+    role: Literal["question","value","support"] | None = None
+
+    @model_validator(mode="after")
+    def valid_graphic(self):
+        if self.type == "shape" and (not self.shape or not self.extent or not all(0 < v <= .9 for v in self.extent)):
+            raise ValueError("shape needs a valid normalized extent")
+        if self.type == "segment" and (self.source is None or self.to is None):
+            raise ValueError("segment needs distinct endpoints")
+        return self
 
 
 class Asset(BaseModel):
