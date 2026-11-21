@@ -1,0 +1,1 @@
+"""External illustration backend adapters."""

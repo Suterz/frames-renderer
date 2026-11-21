@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+outputs/
+*.safetensors
+*.onnx
+*.gguf
+*.ckpt
+*.partial.mp4
+voice-raw.wav
+raw.wav
+.env
