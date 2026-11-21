@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 from PIL import Image
@@ -104,6 +105,7 @@ def focus_crop(clean_ref, clean_out, anchor, zoom, size):
 
 
 def run(root, session, job, backend):
+    started = time.monotonic()
     s = json.loads((session / "request.json").read_text())
     req = json.loads((job / "request.json").read_text())
     size = tuple(s["canvas"])
@@ -124,7 +126,10 @@ def run(root, session, job, backend):
     LEASE.parent.mkdir(parents=True, exist_ok=True)
     with LEASE.open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
+        report["gpu_lease_wait_seconds"] = round(time.monotonic() - started, 3)
         for trial in range(1 + req["retry_budget"]):
+            if time.monotonic() - started > 720:
+                raise NeedsReview("panel review/repair exceeded its wall-time budget")
             attempt = job / f"attempt-{trial}"
             attempt.mkdir()
             proof = {"attempt": trial, "feedback": feedback}
@@ -285,7 +290,7 @@ def run(root, session, job, backend):
                     if failures:
                         raise NeedsReview("; ".join(failures))
                 report.update(anchors=anchors, clean_sha256=sha(clean), composed_sha256=sha(composed),
-                              accepted_attempt=trial)
+                              accepted_attempt=trial, seconds=round(time.monotonic()-started, 3))
                 for path in (clean, composed, overlay, phone):
                     shutil.copyfile(path, job / path.name)
                 atomic(job / "review.json", report)
