@@ -50,6 +50,7 @@ class Asset(BaseModel):
     visual: str
     seed: int = 7
     anchors: dict[str,str | list[float]] = Field(default_factory=dict)
+    keep_largest_component: bool = False
 
     @model_validator(mode="after")
     def asset_anchor_coordinates(self):
@@ -60,6 +61,8 @@ class Asset(BaseModel):
                 if not position.strip():raise ValueError(f"asset anchor {key!r} has no visual query")
             elif len(position)!=2 or any(not 0<=v<=1 for v in position):
                 raise ValueError(f"asset anchor {key!r} needs two normalized numbers in [0,1]")
+            elif self.keep_largest_component:
+                raise ValueError("matte cleanup can recrop the asset; request semantic anchors instead of fixed local coordinates")
         return self
 
 

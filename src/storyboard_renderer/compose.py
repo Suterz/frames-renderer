@@ -32,7 +32,31 @@ def approved_text(template: str, values: dict) -> str:
     return re.sub(r"\{([a-zA-Z0-9_]+)\}", replace, template)
 
 
-def make_cutout(source: Path, target: Path) -> Image.Image:
+def largest_component(mask: Image.Image) -> Image.Image:
+    """Keep a caller-declared coherent silhouette; preserve enclosed holes."""
+    w,h=mask.size
+    remaining=bytearray(bool(x) for x in mask.tobytes())
+    largest=[]
+    for start in range(w*h):
+        if not remaining[start]:
+            continue
+        remaining[start]=0
+        component=[start]
+        for n in component:
+            x,y=n%w,n//w
+            for k in (n-1 if x else -1,n+1 if x<w-1 else -1,n-w if y else -1,n+w if y<h-1 else -1):
+                if k>=0 and remaining[k]:
+                    remaining[k]=0
+                    component.append(k)
+        if len(component)>len(largest):
+            largest=component
+    picked=bytearray(w*h)
+    for k in largest:
+        picked[k]=255
+    return Image.frombytes("L",(w,h),bytes(picked))
+
+
+def make_cutout(source: Path, target: Path, *, keep_largest=False) -> Image.Image:
     """Flood-fill corner-connected pale background, not orange-colored foreground."""
     rgb=Image.open(source).convert("RGB")
     w,h=rgb.size
@@ -57,9 +81,11 @@ def make_cutout(source: Path, target: Path) -> Image.Image:
     # Matte small border is intentionally conservative; never create extra objects.
     mask=Image.new("L",(rw,rh),255)
     mask.putdata([0 if x else 255 for x in outside])
+    if keep_largest:
+        mask=largest_component(mask)
     bounds=mask.getbbox()
     if bounds is None or (bounds[2]-bounds[0])*(bounds[3]-bounds[1])<rw*rh*.035 or (bounds[2]-bounds[0])*(bounds[3]-bounds[1])>rw*rh*.8:
-        raise NeedsReview("orange cutout foreground appears absent or background has not been removed")
+        raise NeedsReview("cutout foreground appears absent or background has not been removed")
     cut=reduced.convert("RGBA")
     cut.putalpha(mask)
     cut=cut.crop(bounds)

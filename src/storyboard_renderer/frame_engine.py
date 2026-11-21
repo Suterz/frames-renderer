@@ -165,7 +165,7 @@ def run(root, session, job, backend):
                                 prompt = (f"{art}\nAn editorial cartoon cutout asset. {asset['visual']} "
                                           "Single centered object on completely flat clean white background; no text, border, other objects or floor shadow.")
                             generated = backend.render(prompt, 768, 768, asset["seed"], raw)
-                            sprite = make_cutout(raw, cut)
+                            sprite = make_cutout(raw, cut,keep_largest=asset.get("keep_largest_component",False))
                             local = {}
                             if any(isinstance(v, str) for v in asset["anchors"].values()):
                                 backend.free()
