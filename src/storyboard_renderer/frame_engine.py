@@ -149,16 +149,18 @@ def run(root, session, job, backend):
                     sprites, positions = {}, {}
                     for key in dict.fromkeys(keys):
                         asset = s["assets"][key]
-                        fingerprint = digest([art, asset, backend.profile, "cutout-v2.1"])
+                        fingerprint = digest([art, asset, backend.profile, s["legacy_input"], "cutout-v2.2"])
                         cache = session / "cutouts" / fingerprint
                         cache.mkdir(parents=True, exist_ok=True)
                         cut, record_path = cache / "cut.png", cache / "record.json"
                         reused = record_path.is_file() and cut.is_file()
                         if not reused:
                             raw = cache / "source.png"
-                            generated = backend.render(
-                                f"{art}\n{asset['visual']}. One complete isolated object, plain white background, no text or shadow.",
-                                768, 768, asset["seed"], raw)
+                            prompt = f"{art}\n{asset['visual']}. One complete isolated object, plain white background, no text or shadow."
+                            if s["legacy_input"]:
+                                prompt = (f"{art}\nAn editorial cartoon cutout asset. {asset['visual']} "
+                                          "Single centered object on completely flat clean white background; no text, border, other objects or floor shadow.")
+                            generated = backend.render(prompt, 768, 768, asset["seed"], raw)
                             sprite = make_cutout(raw, cut)
                             local = {}
                             if any(isinstance(v, str) for v in asset["anchors"].values()):
