@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+export PYTHONPATH="$PWD/src"
+export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
+exec "${FRAME_PYTHON:-$HOME/venvs/storyboard-renderer/bin/python}" -m uvicorn storyboard_renderer.frame_api:app --host 127.0.0.1 --port "${FRAME_PORT:-8788}" --workers 1

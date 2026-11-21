@@ -115,6 +115,13 @@ def layered_scene(size:tuple[int,int],assets:dict[str,Image.Image],layers:list[d
         sprite=assets[key]
         sw=round(w*fraction)
         sh=round(sw*sprite.height/sprite.width)
+        if "max_height" in layer:
+            limit=layer["max_height"]
+            if not isinstance(limit,(int,float)) or not .02<=limit<=.8:
+                raise ValueError(f"{name}: invalid max_height")
+            if sh>h*limit:
+                sh=round(h*limit)
+                sw=max(1,round(sh*sprite.width/sprite.height))
         box=(round(center[0]*w-sw/2),round(center[1]*h-sh/2),
              round(center[0]*w-sw/2)+sw,round(center[1]*h-sh/2)+sh)
         if box[0]<0 or box[1]<0 or box[2]>w or box[3]>h:

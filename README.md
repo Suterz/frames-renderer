@@ -1,4 +1,23 @@
 # storyboard-renderer
+
+## V2 standalone frame service
+
+`./bin/start-frame-renderer` starts the v2 API on `127.0.0.1:8788`.
+`POST /v2/sessions` accepts `story_context` and `visual_signature`, optionally
+`canvas`, `style_ref_ids`, `assets`, `values` and `checks`. Use `POST /v2/assets`
+with multipart `image` to store a style reference PNG. Submit panel work to
+`POST /v2/sessions/{session_id}/panels` and poll its `status_url` until accepted,
+rejected for `needs_review`, or failed. See `bin/demo-repair` for a real request.
+
+Each continuation names its accepted `parent_panel_id`. The API rejects
+cross-session references and reuses an identical submission key within a
+session. Clean art, composition, overlay, phone preview and review are separate
+artifacts; accepted status includes hashes. Visual checks are model
+observations, not guarantees. Explicit controlled fallback can replace a
+failed drawing without mixing lesson state between sessions. The frame HTTP
+workflow has no audio or FFmpeg prerequisite.
+
+The original v1 setup below is kept for rollback/migration while v2 is staged.
 Renders structured storyboards into narrated MP4 videos using an external illustration service.
 
 ## First working release
