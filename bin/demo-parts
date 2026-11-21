@@ -1,0 +1,23 @@
+#!/usr/bin/env python3
+"""Small semantic part, reverse placement, and absent-target control."""
+import json
+import httpx
+
+with httpx.Client(base_url="http://127.0.0.1:8788") as h:
+    r = h.post("/v2/sessions", json={"story_context": "A diagram distinguishes two price-tag ties on separate grocery bags.",
+        "visual_signature": "Flat ivory background, thick plum outlines, warm ochre, one vivid teal and one dark purple point of interest. No lettering."})
+    r.raise_for_status()
+    sid = r.json()["session_id"]
+    for i, (left, right, seed) in enumerate([("teal", "purple", 31), ("purple", "teal", 732), ("red", "purple", 942)]):
+        r = h.post(f"/v2/sessions/{sid}/panels", json={
+            "key": f"parts-{i}", "op": "new_scene", "scene_id": f"scene-{i}",
+            "objective": "Distinguish the ribbon knot from the bag body, blank tag face and pear.",
+            "instruction": (f"Two separate ochre grocery bags on a counter, spaced far apart. The left bag has one bright {left} ribbon "
+                            f"tied in a distinctive large bow attached to its blank white price tag; the right bag has one {right} "
+                            "ribbon bow attached to a separate blank tag. One yellow pear below both bags. Empty upper third. "
+                            "No other ribbon colors; no arrows, writing or objects."),
+            "seed": seed, "anchors": {"tag.knot": "the little center knot of the teal ribbon bow tied to a price tag, not a loop, the tag face or the bag. If no teal bow or the knot is obscured say absent"},
+            "overlays": [{"type": "arrow", "from": [.5, .15], "to": "tag.knot"}],
+            "composed_checks": [{"question": "What does the arrowhead touch? Answer 'knot', 'tag', 'bag', or 'other'.", "expected": "knot"}],
+            "retry_budget": 0})
+        print(r.status_code, json.dumps(r.json()))

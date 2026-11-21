@@ -1,0 +1,39 @@
+#!/usr/bin/env python3
+"""Branched controller fixture and a topological negative control."""
+import json
+import os
+import sys
+
+import httpx
+
+base = os.getenv("FRAME_URL", "http://127.0.0.1:8788")
+items = {
+    "sensor": ("one simple blue digital thermometer with no numerals", 53, [.5, .24]),
+    "controller": ("one simple teal electronic controller box without lettering", 288, [.5, .43]),
+    "fan": ("one simple round orange ventilation fan with three broad blades", 414, [.23, .70]),
+    "lamp": ("one blue indicator bulb in a simple socket, blue bulb clearly visible, no rays", 512, [.77, .70]),
+}
+links = [{"from": a + ".center", "to": b + ".center"} for a, b in
+         (("sensor", "controller"), ("controller", "fan"), ("controller", "lamp"))]
+with httpx.Client(base_url=base, timeout=30) as h:
+    r = h.post("/v2/sessions", json={"story_context": "A greenhouse thermostat sends two distinct output signals.",
+        "visual_signature": "Ivory paper, bold plum strokes and inked editorial cartoons with teal blue and ochre accents.",
+        "assets": {k: {"kind": "generated_cutout", "visual": v[0], "seed": v[1]} for k, v in items.items()}})
+    r.raise_for_status()
+    sid = r.json()["session_id"]
+    panel = {"key": "diagram", "scene_id": "greenhouse", "op": "new_scene",
+             "instruction": "An input sensor above the controller. Fan and blue indicator are two separate outputs below.",
+             "objective": "Show a branch from the threshold controller to the fan and indicator, rather than a chain.",
+             "layout": {"layers": [{"id": k, "asset": k, "center": v[2], "width": .19, "max_height": .13} for k, v in items.items()]},
+             "expected_links": links, "clear_of": [k + ".center" for k in items],
+             "overlays": [{"type": "text", "text": name, "at": pos} for name, pos in
+                          [("SENSOR", [.5, .12]), ("CONTROLLER", [.26, .43]), ("FAN: ON", [.23, .805]), ("BLUE LAMP", [.77, .805])]],
+             "composed_checks": [{"question": "Which device is at the branch where two outgoing arrows separate? Give only its label.",
+                                  "expected": "controller"}], "retry_budget": 0}
+    actual = [dict(x) for x in links]
+    if "--negative" in sys.argv:
+        actual[-1] = {"from": actual[-1]["to"], "to": actual[-1]["from"]}
+    panel["overlays"] += [{"type": "arrow", **link} for link in actual]
+    r = h.post(f"/v2/sessions/{sid}/panels", json=panel)
+    r.raise_for_status()
+    print(json.dumps(r.json()))

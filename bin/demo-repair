@@ -1,0 +1,31 @@
+#!/usr/bin/env python3
+"""Public-API repair fixture; a wrong fruit count must trigger controlled placement."""
+import json
+from pathlib import Path
+
+import httpx
+
+base = "http://127.0.0.1:8788"
+with httpx.Client(base_url=base, timeout=30) as h:
+    with (Path.home() / "Videos/storyboard-renderer/demo/clean/P01.png").open("rb") as f:
+        r = h.post("/v2/assets", files={"image": ("style.png", f, "image/png")})
+        r.raise_for_status()
+    ref = r.json()["asset_id"]
+    r = h.post("/v2/sessions", json={
+        "story_context": "A counting exercise in which exactly three oranges are necessary.",
+        "visual_signature": "Simple warm ivory paper, plum ink outlines, flat orange, teal leaves, no writing.",
+        "style_ref_ids": [ref],
+        "assets": {"orange": {"kind": "generated_cutout", "visual": "one orange fruit with a single green leaf", "seed": 119}},
+    })
+    r.raise_for_status()
+    sid = r.json()["session_id"]
+    r = h.post(f"/v2/sessions/{sid}/panels", json={
+        "key": "count", "op": "new_scene", "scene_id": "fruit",
+        "objective": "Show exactly three individually visible oranges.",
+        "instruction": "A grocery still life: five separated oranges on blank ivory paper, no writing.",
+        "clean_checks": [{"question": "How many oranges are visible? Give one digit.", "expected": "3"}],
+        "composed_checks": [{"question": "How many orange fruits are visible? Give one digit.", "expected": "3"}],
+        "fallback_layout": {"asset": "orange", "count": 3},
+    })
+    r.raise_for_status()
+    print(json.dumps(r.json()))
