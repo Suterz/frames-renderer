@@ -271,6 +271,11 @@ def status(sid: str, pid: str):
     if (p / "review.json").exists():
         report = read(p / "review.json")
         d["summary"] = {k: report[k] for k in ("clean_sha256", "composed_sha256", "scene_root", "anchors") if k in report}
+        d["attempt_artifacts"] = [
+            {name: f"{d['status_url']}/attempts/{index}/{name}" for name in ("clean.png", "composed.png", "phone.png", "overlay.png")
+             if (p / f"attempt-{index}" / name).is_file()}
+            for index in range(len(report.get("attempts", [])))
+        ]
     return d
 
 
@@ -281,3 +286,15 @@ def artifact(sid: str, pid: str, name: str):
     if name not in ("clean.png", "composed.png", "overlay.png", "review.json", "phone.png") or not (p / name).is_file():
         raise HTTPException(404, "unknown artifact")
     return FileResponse(p / name)
+
+
+@app.get("/v2/sessions/{sid}/panels/{pid}/attempts/{index}/{name}")
+def attempt_artifact(sid: str, pid: str, index: int, name: str):
+    s = resolve_dir(ROOT / "sessions", sid, "request.json")
+    p = resolve_dir(s / "panels", pid, "status.json")
+    if not (0 <= index <= 4) or name not in ("clean.png", "composed.png", "overlay.png", "phone.png"):
+        raise HTTPException(404, "unknown artifact")
+    f = p / f"attempt-{index}" / name
+    if not f.is_file():
+        raise HTTPException(404, "unknown artifact")
+    return FileResponse(f)
