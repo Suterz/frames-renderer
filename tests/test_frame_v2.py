@@ -34,3 +34,18 @@ def test_tall_sprite_preserves_aspect_and_local_anchor_when_capped(tmp_path):
     x0, y0, x1, y1 = a["one.center"]["box"]
     assert y1 - y0 == 96 and x1 - x0 == 19
     assert a["one.tip"]["point"] == (180, 58) or a["one.tip"]["point"] == (181, 58)
+
+
+def test_same_key_survives_additive_schema_defaults(tmp_path, monkeypatch):
+    from storyboard_renderer import frame_api as api
+    monkeypatch.setattr(api, "ROOT", tmp_path)
+    sid = api.session(Session(story_context="one orange", visual_signature="plum ink"))["session_id"]
+    body = dict(key="one", op="new_scene", scene_id="scene", objective="one orange", instruction="draw")
+    p = tmp_path / "sessions" / sid / "panels" / ("0" * 32)
+    p.mkdir()
+    api.atomic(p / "request.json", body)
+    api.atomic(p / "status.json", {"key": "one", "fingerprint": api.digest(body), "panel_id": p.name})
+    assert api.panel(sid, Panel(**body))["panel_id"] == p.name
+    with pytest.raises(api.HTTPException) as exc:
+        api.panel(sid, Panel(**{**body, "seed": 99}))
+    assert exc.value.status_code == 409

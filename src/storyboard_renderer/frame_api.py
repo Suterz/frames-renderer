@@ -241,7 +241,14 @@ def panel(sid: str, req: Panel):
             data = read(old)
             if data["key"] == req.key:
                 if data["fingerprint"] != fingerprint:
-                    raise HTTPException(409, "idempotency key already used with different request")
+                    # Revalidate historical payloads before deciding a key
+                    # conflicts. Additive schema defaults are not a revision.
+                    try:
+                        prior = Panel.model_validate(read(old.parent / "request.json")).model_dump(mode="json", by_alias=True)
+                    except ValueError:
+                        prior = None
+                    if prior != body:
+                        raise HTTPException(409, "idempotency key already used with different request")
                 return data
         for ref in (req.parent_panel_id, req.revision_of):
             if ref:
