@@ -102,6 +102,7 @@ class Panel(Strict):
     expected_links: list[Link] | None = None
     clear_of: list[str] = Field(default_factory=list)
     focus: Focus | None = None
+    paper_scene: bool = False
     retry_budget: int = Field(default=2, ge=0, le=4)
 
     @model_validator(mode="after")
@@ -110,6 +111,8 @@ class Panel(Strict):
             raise ValueError("new_scene forbids a parent; edits/reveals require one")
         if (self.op == "focus") != bool(self.focus):
             raise ValueError("focus requires a focus specification on the focus operation only")
+        if self.paper_scene and (self.op != "new_scene" or self.layout or self.fallback_layout or self.anchors):
+            raise ValueError("paper scene is an authored graphic canvas, not generated art or a layout")
         if any(not KEY.fullmatch(k) for k in self.anchors):
             raise ValueError("unsafe anchor name")
         if (self.layout or self.fallback_layout) and self.op != "new_scene":

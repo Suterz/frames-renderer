@@ -8,11 +8,12 @@ import os
 import shutil
 import subprocess
 import time
+from contextlib import nullcontext
 from pathlib import Path
 
 from PIL import Image
 
-from .compose import compose, controlled_scene, layered_scene, make_cutout, point_of
+from .compose import GRAPHIC_THEMES, compose, controlled_scene, layered_scene, make_cutout, point_of
 from .grounding import NeedsReview, derive_edge, resolve
 from .schema import Overlay
 from .signature import art_only
@@ -123,9 +124,12 @@ def run(root, session, job, backend):
     repair_index = 0
     last_composition_source = None
     active_overlays = req["overlays"]
+    gpu = ((req["op"] not in ("overlay_only","focus") and not req.get("paper_scene"))
+           or any(req.get(key) for key in ("clean_checks","composed_checks","anchors")))
     LEASE.parent.mkdir(parents=True, exist_ok=True)
-    with LEASE.open("a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
+    with (LEASE.open("a") if gpu else nullcontext()) as lock:
+        if lock is not None:
+            fcntl.flock(lock, fcntl.LOCK_EX)
         report["gpu_lease_wait_seconds"] = round(time.monotonic() - started, 3)
         for trial in range(1 + req["retry_budget"]):
             if time.monotonic() - started > 720:
@@ -209,6 +213,11 @@ def run(root, session, job, backend):
                             anchors[name] = {**val, "point": points, "box": bounds, "crop_from": val["point"],
                                              "method": "composition crop of previously accepted anchor", "source_hash": sha(clean)}
                     proof["focus_canvas_crop"] = [x0,y0,x1,y1]
+                elif req.get("paper_scene"):
+                    palette=GRAPHIC_THEMES.get(s.get("graphic_theme"),GRAPHIC_THEMES["paper"])
+                    Image.new("RGB",size,palette["paper"]).save(clean)
+                    anchors={}
+                    proof["clean_source"]="authored_paper_scene"
                 else:
                     prompt = (f"{art}\nStory context: {s['story_context']}\n{req['instruction']}\n"
                               f"Change: {req['change']}. Preserve: {req['keep']}. No written words, numbers, or annotations.")
@@ -234,7 +243,7 @@ def run(root, session, job, backend):
                 images.append(("New candidate to judge", str(clean)))
                 checks = req["clean_checks"]
                 queries = [simple_query([images[-1]], c["question"]) for c in checks]
-                rubric = not s["legacy_input"] and req["op"] not in ("overlay_only", "focus")
+                rubric = not s["legacy_input"] and not req.get("paper_scene") and req["op"] not in ("overlay_only", "focus")
                 if rubric:
                     queries.append({"images": images, "prompt":
                         f"Teaching objective: {req['objective']}\nImage instruction: "
@@ -317,5 +326,6 @@ def run(root, session, job, backend):
                 if req["op"] == "overlay_only" and not req["anchors"] and not req.get("overlay_repairs"):
                     break
             finally:
-                backend.free()
+                if gpu:
+                    backend.free()
     raise NeedsReview(feedback or "no candidate passed")
