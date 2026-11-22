@@ -12,7 +12,7 @@ from contextlib import nullcontext
 from pathlib import Path
 
 from PIL import Image, ImageChops
-from .claims import region_claim,controlled_transition
+from .claims import region_claim,controlled_transition,count_components
 
 from .compose import GRAPHIC_THEMES, compose, controlled_scene, layered_scene, make_cutout, point_of
 from .grounding import NeedsReview, derive_edge, resolve
@@ -382,6 +382,10 @@ def run(root, session, job, backend):
                 missing=sorted(set(req.get("require_fact_ids",()))-facts.keys())
                 if missing:
                     raise NeedsReview(f"required prediction evidence absent: {', '.join(missing)}")
+                if req.get("component_claims"):
+                    with Image.open(composed) as visible:
+                        proof["component_counts"]=[count_components(visible,c["region"],c["rgb"],
+                            c["minimum_pixels"],c["expected"]) for c in req["component_claims"]]
                 stage = "composed_review"
                 observation_specs = req["composed_checks"]
                 if observation_specs:
@@ -429,6 +433,9 @@ def run(root, session, job, backend):
                     layout = req["fallback_layout"]
                     continue
                 if req["op"] == "overlay_only" and repair_index>=len(options):
+                    break
+                if (req["op"]=="layout_transition" or req.get("paper_scene")) and not reanchor:
+                    # New seeds cannot fix an exact composition with no new art.
                     break
             except Exception as exc:
                 proof.update(stage=stage,defect=f"{type(exc).__name__}: {exc}",outcome="failed")

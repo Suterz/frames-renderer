@@ -65,3 +65,25 @@ def controlled_transition(before,after,old_anchors,new_anchors,changed):
     if ImageChops.difference(before.convert("RGB"),after.convert("RGB")).getbbox() is None:
         raise NeedsReview("clean layout pixels remained unchanged")
     return evidence
+
+
+def count_components(image,region,rgb,minimum,expected):
+    """Count separate actual phone-size silhouettes with a declared fill."""
+    phone=image.convert("RGB").resize((360,640),Image.Resampling.LANCZOS)
+    l,t,r,b=box_px(region,phone.size)
+    crop=phone.crop((l,t,r,b))
+    pix=crop.load()
+    remaining={(x,y) for y in range(crop.height) for x in range(crop.width)
+               if sum(abs(a-b) for a,b in zip(pix[x,y],rgb,strict=True))<=46}
+    sizes=[]
+    while remaining:
+        todo=[remaining.pop()]
+        for x,y in todo:
+            for p in ((x-1,y),(x+1,y),(x,y-1),(x,y+1)):
+                if p in remaining:
+                    remaining.remove(p);todo.append(p)
+        if len(todo)>=minimum:
+            sizes.append(len(todo))
+    if len(sizes)!=expected:
+        raise NeedsReview(f"phone-size raster shows {len(sizes)} visible components, expected {expected}")
+    return {"count":len(sizes),"area_px":sorted(sizes),"region_px":[l,t,r,b]}

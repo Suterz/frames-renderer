@@ -81,6 +81,20 @@ class Focus(Strict):
     zoom: float = Field(ge=1.25, le=5)
 
 
+class ComponentClaim(Strict):
+    region: tuple[float,float,float,float]
+    rgb: tuple[int,int,int]
+    minimum_pixels: int = Field(ge=16,le=10000)
+    expected: int = Field(ge=0,le=40)
+
+    @model_validator(mode="after")
+    def valid(self):
+        l,t,r,b=self.region
+        if not (0<=l<r<=1 and 0<=t<b<=1 and all(0<=x<=255 for x in self.rgb)):
+            raise ValueError("bad component check region or RGB")
+        return self
+
+
 class Panel(Strict):
     key: str = Field(pattern=KEY.pattern)
     op: Literal["new_scene", "edit_scene", "overlay_only", "focus","layout_transition"]
@@ -106,6 +120,7 @@ class Panel(Strict):
     action_claim: str | None = Field(default=None,min_length=3,max_length=400)
     require_fact_ids: list[str] = Field(default_factory=list,max_length=24)
     moved_instances: list[str] = Field(default_factory=list,max_length=12)
+    component_claims: list[ComponentClaim] = Field(default_factory=list,max_length=8)
     retry_budget: int = Field(default=2, ge=0, le=4)
 
     @model_validator(mode="after")

@@ -44,6 +44,15 @@ def test_exact_label_next_to_wide_diagram_fits_its_own_safe_region(tmp_path):
     assert Image.open(mask).getchannel("A").getbbox()[2]<1020
 
 
+def test_value_caption_above_subtitle_reserve_resizes_vertically(tmp_path):
+    from storyboard_renderer.compose import compose
+    from storyboard_renderer.schema import Overlay
+    raw=tmp_path/"raw.png";Image.new("RGB",(1080,1920),"white").save(raw)
+    label=Overlay(type="text",at=[.5,.82],text="12 SQUARE UNITS",role="value")
+    compose(raw,[label],"",{}, {},(1080,1920),tmp_path/"out.png",tmp_path/"ink.png")
+    assert (tmp_path/"out.png").is_file()
+
+
 def test_named_ticks_detected_over_colored_area_but_not_if_overpainted(tmp_path):
     from storyboard_renderer.compose import compose
     from storyboard_renderer.schema import Overlay
@@ -78,3 +87,16 @@ def test_translated_cutout_retains_exact_pixels_and_fixes_annotation_only(tmp_pa
             controlled_transition(start,start,old,old,["subject"])
         with pytest.raises(NeedsReview,match="actual drawn cutout changed"):
             controlled_transition(start,start,old,new,["subject"])
+
+
+def test_count_preserves_separation_and_rejects_an_extra_counter():
+    from storyboard_renderer.claims import count_components
+    a=Image.new("RGB",(360,640),"white")
+    ink=(185,60,30)
+    draw=ImageDraw.Draw(a)
+    for x in (90,150,210):
+        draw.ellipse((x,200,x+18,218),fill=ink)
+    assert count_components(a,(.14,.2,.85,.5),ink,80,3)["count"]==3
+    draw.ellipse((252,200,270,218),fill=ink)
+    with pytest.raises(NeedsReview,match="4 visible"):
+        count_components(a,(.14,.2,.85,.5),ink,80,3)

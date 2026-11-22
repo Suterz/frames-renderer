@@ -257,7 +257,9 @@ def compose(clean_path: Path, overlays: list, caption: str, values: dict, anchor
                 max_local_width=min(w*.82,2*min(center[0]-w*.07,w*.93-center[0]))
                 for pt in range(max_pt,min_pt-1,-1):
                     font=font_for(text,pt)
-                    if draw.textlength(text,font=font)<=max_local_width:
+                    local_bounds=draw.textbbox(center,text,font=font,anchor="mm")
+                    if (draw.textlength(text,font=font)<=max_local_width
+                        and h*.04<=local_bounds[1] and local_bounds[3]<=h*.84):
                         break
                 else:
                     raise NeedsReview(f"instructional text too wide at phone-legible size: {text!r}")
