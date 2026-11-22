@@ -86,12 +86,15 @@ class ComponentClaim(Strict):
     rgb: tuple[int,int,int]
     minimum_pixels: int = Field(ge=16,le=10000)
     expected: int = Field(ge=0,le=40)
+    extent_px: tuple[int,int] | None = None
 
     @model_validator(mode="after")
     def valid(self):
         l,t,r,b=self.region
         if not (0<=l<r<=1 and 0<=t<b<=1 and all(0<=x<=255 for x in self.rgb)):
             raise ValueError("bad component check region or RGB")
+        if self.extent_px and not all(4<=p<=180 for p in self.extent_px):
+            raise ValueError("component extent is outside the phone-size limits")
         return self
 
 

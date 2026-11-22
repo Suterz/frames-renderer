@@ -117,3 +117,16 @@ def test_insertion_requires_a_new_visible_cutout_and_keeps_old_ones(tmp_path):
             controlled_transition(start,start,aa,bb,[],["two"])
         with pytest.raises(NeedsReview):
             controlled_transition(start,end,aa,bb,[],[])
+
+
+def test_count_does_not_count_caption_underlines_as_round_objects():
+    from storyboard_renderer.claims import count_components
+    a=Image.new("RGB",(360,640),"white");d=ImageDraw.Draw(a); ink=(185,60,30)
+    d.rectangle((100,150,220,154),fill=ink)
+    for x in (90,150,210):
+        d.ellipse((x,200,x+18,218),fill=ink)
+    r=count_components(a,(.14,.2,.85,.5),ink,80,3,[19,19])
+    assert r["count"]==3 and r["excluded_extents"]==[[121,5]]
+    d.ellipse((250,200,268,218),fill=ink)
+    with pytest.raises(NeedsReview,match="4 visible"):
+        count_components(a,(.14,.2,.85,.5),ink,80,3,[19,19])

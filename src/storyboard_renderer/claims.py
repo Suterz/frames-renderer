@@ -74,7 +74,7 @@ def controlled_transition(before,after,old_anchors,new_anchors,changed,inserted=
     return evidence
 
 
-def count_components(image,region,rgb,minimum,expected):
+def count_components(image,region,rgb,minimum,expected,extent_px=None):
     """Count separate actual phone-size silhouettes with a declared fill."""
     phone=image.convert("RGB").resize((360,640),Image.Resampling.LANCZOS)
     l,t,r,b=box_px(region,phone.size)
@@ -83,6 +83,7 @@ def count_components(image,region,rgb,minimum,expected):
     remaining={(x,y) for y in range(crop.height) for x in range(crop.width)
                if sum(abs(a-b) for a,b in zip(pix[x,y],rgb,strict=True))<=46}
     sizes=[]
+    excluded=[]
     while remaining:
         todo=[remaining.pop()]
         for x,y in todo:
@@ -90,7 +91,12 @@ def count_components(image,region,rgb,minimum,expected):
                 if p in remaining:
                     remaining.remove(p);todo.append(p)
         if len(todo)>=minimum:
-            sizes.append(len(todo))
+            w=max(x for x,y in todo)-min(x for x,y in todo)+1
+            h=max(y for x,y in todo)-min(y for x,y in todo)+1
+            if extent_px and any(abs(a-b)>max(3,b*.20) for a,b in zip((w,h),extent_px,strict=True)):
+                excluded.append([w,h])
+            else:
+                sizes.append(len(todo))
     if len(sizes)!=expected:
         raise NeedsReview(f"phone-size raster shows {len(sizes)} visible components, expected {expected}")
-    return {"count":len(sizes),"area_px":sorted(sizes),"region_px":[l,t,r,b]}
+    return {"count":len(sizes),"area_px":sorted(sizes),"region_px":[l,t,r,b],"excluded_extents":excluded}

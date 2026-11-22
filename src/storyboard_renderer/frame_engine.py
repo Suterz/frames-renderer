@@ -386,7 +386,7 @@ def run(root, session, job, backend):
                 if req.get("component_claims"):
                     with Image.open(composed) as visible:
                         proof["component_counts"]=[count_components(visible,c["region"],c["rgb"],
-                            c["minimum_pixels"],c["expected"]) for c in req["component_claims"]]
+                            c["minimum_pixels"],c["expected"],c.get("extent_px")) for c in req["component_claims"]]
                 stage = "composed_review"
                 observation_specs = req["composed_checks"]
                 if observation_specs:
