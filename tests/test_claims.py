@@ -130,3 +130,14 @@ def test_count_does_not_count_caption_underlines_as_round_objects():
     d.ellipse((250,200,268,218),fill=ink)
     with pytest.raises(NeedsReview,match="4 visible"):
         count_components(a,(.14,.2,.85,.5),ink,80,3,[19,19])
+
+
+def test_polygon_illustration_retains_part_pixels(tmp_path):
+    from storyboard_renderer.compose import compose
+    from storyboard_renderer.schema import Overlay
+    src=tmp_path/"clean.png";size=(360,640);Image.new("RGB",size,"ivory").save(src)
+    glyph=Overlay(type="shape",shape="polygon",ink="accent",vertices=[(.2,.2),(.6,.2),(.5,.5),(.3,.5)])
+    out=tmp_path/"polygon.png"
+    compose(src,[glyph],"",{}, {},size,out,tmp_path/"layer.png",theme="paper")
+    with Image.open(out) as im:
+        assert im.getpixel((144,190))==(191,77,49) and im.getpixel((8,13))!=(191,77,49)

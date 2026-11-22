@@ -31,8 +31,9 @@ class Overlay(BaseModel):
     source: str | list[float] | None = Field(default=None, alias="from")
     to: str | list[float] | None = None
     divisions: int | None = Field(default=None, ge=1, le=32)
-    shape: Literal["rect","disc"] | None = None
+    shape: Literal["rect","disc","polygon"] | None = None
     extent: tuple[float,float] | None = None
+    vertices: list[tuple[float,float]] | None = Field(default=None,max_length=24)
     ink: Literal["ink","accent","pale"] = "ink"
     role: Literal["question","value","support"] | None = None
     fact: str | None = Field(default=None, pattern=r"^[a-zA-Z][\w.-]{0,63}$")
@@ -51,8 +52,15 @@ class Overlay(BaseModel):
             l,t,r,b=self.target_region
             if not (0<=l<r<=1 and 0<=t<b<=1 and all(0<=v<=255 for v in self.target_rgb)):
                 raise ValueError("invalid authored target region or RGB")
-        if self.type == "shape" and (not self.shape or not self.extent or not all(0 < v <= .9 for v in self.extent)):
-            raise ValueError("shape needs a valid normalized extent")
+        if self.type == "shape":
+            if self.shape=="polygon":
+                if not self.vertices or len(self.vertices)<3 or not all(.02<=x<=.98 and .02<=y<=.98 for x,y in self.vertices):
+                    raise ValueError("polygon needs three to twenty-four in-bounds vertices")
+                area=abs(sum(x*ny-y*nx for (x,y),(nx,ny) in zip(self.vertices,self.vertices[1:]+self.vertices[:1])))/2
+                if area<.0003:
+                    raise ValueError("polygon silhouette too small or degenerate")
+            elif not self.shape or not self.extent or not all(0 < v <= .9 for v in self.extent):
+                raise ValueError("shape needs a valid normalized extent")
         if self.type == "segment" and (self.source is None or self.to is None):
             raise ValueError("segment needs distinct endpoints")
         return self

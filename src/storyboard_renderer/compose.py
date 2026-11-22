@@ -224,6 +224,10 @@ def compose(clean_path: Path, overlays: list, caption: str, values: dict, anchor
                     x,y=a[0]+dx*i/d,a[1]+dy*i/d
                     draw.line([(round(x-tx),round(y-ty)),(round(x+tx),round(y+ty))],fill=color,width=width)
         elif kind=="shape":
+            if item.shape=="polygon":
+                points=[(round(x*w),round(y*h)) for x,y in item.vertices]
+                draw.polygon(points,fill=palette[item.ink])
+                continue
             cx,cy=point_of(item.at,anchors,size)
             rx,ry=item.extent[0]*w/2,item.extent[1]*h/2
             box=(round(cx-rx),round(cy-ry),round(cx+rx),round(cy+ry))
