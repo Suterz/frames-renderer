@@ -339,16 +339,25 @@ def run(root, session, job, backend):
                                  min(size[0],tip[0]+margin),min(size[1],tip[1]+margin))).save(crop)
                     backend.free()
                     views=[[("Cropped arrow endpoint",str(crop))],[("Actual phone frame",str(phone))]]
-                    observations=evaluate([simple_query(x,"What visible part precisely touches the arrowhead tip? Name only that part, not the parent object.") for x in views])
+                    if glyph.part_relation=="inside_region":
+                        ask="What visible open region contains the arrowhead tip? If it lands on the boundary, name that boundary instead."
+                        verify=f"Is the tip visually inside {glyph.part_target}, not on the boundary or an adjoining part? Answer yes only if clear; otherwise no."
+                    else:
+                        ask="What visible part precisely touches the arrowhead tip? Name only that part, not the parent object."
+                        verify=f"Does the tip physically touch the {glyph.part_target}, rather than an adjoining part? Answer yes only if clear; otherwise no."
+                    observations=evaluate([simple_query(x,ask) for x in views])
                     proof["part_observations"]=observations
-                    verdict=evaluate([simple_query(x,f"Does the tip physically touch the {glyph.part_target}, rather than an adjoining part? Answer yes only if clear; otherwise no.") for x in views])
+                    verdict=evaluate([simple_query(x,verify) for x in views])
                     proof["part_verdict"]=verdict
                     if any(parsed(v).get("answer","").strip().casefold().rstrip(".")!="yes" for v in verdict):
-                        raise NeedsReview(f"composited arrow tip does not clearly touch {glyph.part_target} in both views")
+                        raise NeedsReview(f"composited arrow tip does not clearly satisfy {glyph.part_relation} for {glyph.part_target} in both views")
                 stage="fact_inspection"
                 from .fact_evidence import inspect_facts
                 facts=inspect_facts(base,composed,overlays,s["values"],anchors,size,s.get("graphic_theme"),attempt)
                 proof["facts"]=facts
+                missing=sorted(set(req.get("require_fact_ids",()))-facts.keys())
+                if missing:
+                    raise NeedsReview(f"required prediction evidence absent: {', '.join(missing)}")
                 stage = "composed_review"
                 observation_specs = req["composed_checks"]
                 if observation_specs:

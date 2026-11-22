@@ -37,6 +37,7 @@ class Overlay(BaseModel):
     role: Literal["question","value","support"] | None = None
     fact: str | None = Field(default=None, pattern=r"^[a-zA-Z][\w.-]{0,63}$")
     part_target: str | None = Field(default=None,min_length=3,max_length=200)
+    part_relation: Literal["touch_surface","inside_region"] = "touch_surface"
     target_region: tuple[float,float,float,float] | None = None
     target_rgb: tuple[int,int,int] | None = None
 

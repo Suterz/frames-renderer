@@ -104,6 +104,7 @@ class Panel(Strict):
     focus: Focus | None = None
     paper_scene: bool = False
     action_claim: str | None = Field(default=None,min_length=3,max_length=400)
+    require_fact_ids: list[str] = Field(default_factory=list,max_length=24)
     retry_budget: int = Field(default=2, ge=0, le=4)
 
     @model_validator(mode="after")
