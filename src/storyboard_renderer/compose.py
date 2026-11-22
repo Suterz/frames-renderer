@@ -139,6 +139,11 @@ def layered_scene(size:tuple[int,int],assets:dict[str,Image.Image],layers:list[d
             or not isinstance(fraction,(int,float)) or not .05<=fraction<=.8):
             raise ValueError(f"{name}: invalid normalized center or width")
         sprite=assets[key]
+        flip_x=layer.get("flip_x",False)
+        if type(flip_x) is not bool:
+            raise NeedsReview("flip_x must be boolean")
+        if flip_x:
+            sprite=sprite.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
         sw=round(w*fraction)
         sh=round(sw*sprite.height/sprite.width)
         if "max_height" in layer:
@@ -162,11 +167,12 @@ def layered_scene(size:tuple[int,int],assets:dict[str,Image.Image],layers:list[d
         clean.paste(resized,box[:2],resized)
         placed.append((name,box))
         anchors[name+".center"]={"point":(round((box[0]+box[2])/2),round((box[1]+box[3])/2)),
-                                 "box":box,"method":"controlled geometry","asset":key}
+                                  "box":box,"method":"controlled geometry","asset":key,"flip_x":flip_x}
         for anchor,position in asset_anchors.get(key,{}).items():
             if not isinstance(position,list) or len(position)!=2 or any(not isinstance(v,(int,float)) or not 0<=v<=1 for v in position):
                 raise ValueError(f"{key}.{anchor}: invalid asset-local normalized anchor")
-            anchors[f"{name}.{anchor}"]={"point":(round(box[0]+sw*position[0]),round(box[1]+sh*position[1])),
+            px=1-position[0] if flip_x else position[0]
+            anchors[f"{name}.{anchor}"]={"point":(round(box[0]+sw*px),round(box[1]+sh*position[1])),
                                         "box":box,"method":"controlled asset-local geometry","asset":key,
                                         "local_position":position}
     clean.save(out)

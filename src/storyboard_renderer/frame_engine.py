@@ -12,7 +12,7 @@ from contextlib import nullcontext
 from pathlib import Path
 
 from PIL import Image, ImageChops
-from .claims import region_claim
+from .claims import region_claim,controlled_transition
 
 from .compose import GRAPHIC_THEMES, compose, controlled_scene, layered_scene, make_cutout, point_of
 from .grounding import NeedsReview, derive_edge, resolve
@@ -198,6 +198,10 @@ def run(root, session, job, backend):
                         anchors = controlled_scene(size, sprites[layout["asset"]], count, clean)
                     else:
                         anchors = layered_scene(size, sprites, layout["layers"], positions, clean)
+                    if req["op"]=="layout_transition":
+                        stage="controlled_movement"
+                        with Image.open(ref) as old,Image.open(clean) as new:
+                            proof["controlled_motion"]=controlled_transition(old,new,previous["anchors"],anchors,req["moved_instances"])
                 elif req["op"] == "overlay_only":
                     shutil.copyfile(ref, clean)
                     anchors = dict(previous["anchors"])
@@ -248,7 +252,7 @@ def run(root, session, job, backend):
                 images.append(("New candidate to judge", str(clean)))
                 checks = req["clean_checks"]
                 queries = [simple_query([images[-1]], c["question"]) for c in checks]
-                rubric = not s["legacy_input"] and not req.get("paper_scene") and req["op"] not in ("overlay_only", "focus")
+                rubric = not s["legacy_input"] and not req.get("paper_scene") and req["op"] not in ("overlay_only", "focus","layout_transition")
                 if rubric:
                     queries.append({"images": images, "prompt":
                         f"Teaching objective: {req['objective']}\nImage instruction: "

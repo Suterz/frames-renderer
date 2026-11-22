@@ -61,3 +61,20 @@ def test_named_ticks_detected_over_colored_area_but_not_if_overpainted(tmp_path)
         else:
             with pytest.raises(NeedsReview,match="obscured"):
                 inspect_facts(base,out,glyphs,{}, {},sz,"atlas",tmp_path)
+
+
+def test_translated_cutout_retains_exact_pixels_and_fixes_annotation_only(tmp_path):
+    from storyboard_renderer.compose import layered_scene
+    from storyboard_renderer.claims import controlled_transition
+    assets={"shape":Image.new("RGBA",(30,50),(200,10,0,255))}
+    fixed={"id":"reference","asset":"shape","center":[.7,.6],"width":.12}
+    def draw(path,x):
+        return layered_scene((360,640),assets,[fixed,{"id":"subject","asset":"shape","center":[x,.4],"width":.14}],{},path)
+    a=tmp_path/"a.png";b=tmp_path/"b.png"
+    old=draw(a,.25);new=draw(b,.40)
+    with Image.open(a) as start,Image.open(b) as end:
+        assert controlled_transition(start,end,old,new,["subject"])["subject"]["delta_px"]==[54,0]
+        with pytest.raises(NeedsReview,match="missing visible movement"):
+            controlled_transition(start,start,old,old,["subject"])
+        with pytest.raises(NeedsReview,match="actual drawn cutout changed"):
+            controlled_transition(start,start,old,new,["subject"])
