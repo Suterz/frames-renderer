@@ -98,6 +98,25 @@ class ComponentClaim(Strict):
         return self
 
 
+class PathClaim(Strict):
+    region: tuple[float,float,float,float]
+    rgb: tuple[int,int,int]
+    start: tuple[float,float]
+    end: tuple[float,float]
+    connected: bool
+
+    @model_validator(mode="after")
+    def valid(self):
+        l,t,r,b=self.region
+        if not (0<=l<r<=1 and 0<=t<b<=1 and all(0<=x<=255 for x in self.rgb)):
+            raise ValueError("bad path region or RGB")
+        if not all(l<=x<r and t<=y<b for x,y in (self.start,self.end)):
+            raise ValueError("path endpoints must be within the inspection region")
+        if ((self.start[0]-self.end[0])*360)**2+((self.start[1]-self.end[1])*640)**2 < 12**2:
+            raise ValueError("path endpoint neighborhoods must be distinct at phone size")
+        return self
+
+
 class Panel(Strict):
     key: str = Field(pattern=KEY.pattern)
     op: Literal["new_scene", "edit_scene", "overlay_only", "focus","layout_transition"]
@@ -125,6 +144,7 @@ class Panel(Strict):
     moved_instances: list[str] = Field(default_factory=list,max_length=12)
     inserted_instances: list[str] = Field(default_factory=list,max_length=12)
     component_claims: list[ComponentClaim] = Field(default_factory=list,max_length=8)
+    path_claims: list[PathClaim] = Field(default_factory=list,max_length=6)
     retry_budget: int = Field(default=2, ge=0, le=4)
 
     @model_validator(mode="after")

@@ -100,3 +100,36 @@ def count_components(image,region,rgb,minimum,expected,extent_px=None):
     if len(sizes)!=expected:
         raise NeedsReview(f"phone-size raster shows {len(sizes)} visible components, expected {expected}")
     return {"count":len(sizes),"area_px":sorted(sizes),"region_px":[l,t,r,b],"excluded_extents":excluded}
+
+
+def check_path(image, region, rgb, start, end, connected):
+    """Check visible ink continuity within a stated region of the phone raster."""
+    phone = image.convert("RGB").resize((360, 640), Image.Resampling.LANCZOS)
+    l,t,r,b = box_px(region, phone.size)
+    crop = phone.crop((l,t,r,b))
+    pix = crop.load()
+    ink = {(x,y) for y in range(b-t) for x in range(r-l)
+           if sum(abs(a-b) for a,b in zip(pix[x,y],rgb,strict=True)) <= 46}
+
+    def endpoint(p):
+        x,y = (round(p[0]*phone.width)-l, round(p[1]*phone.height)-t)
+        return {(x+dx,y+dy) for dx in range(-3,4) for dy in range(-3,4)
+                if dx*dx+dy*dy<=9 and (x+dx,y+dy) in ink}
+
+    sources, targets = endpoint(start), endpoint(end)
+    if not sources or not targets:
+        raise NeedsReview("path claim requires both endpoints to remain visibly inked")
+    visited=set(sources)
+    queue=list(sources)
+    for x,y in queue:
+        if (x,y) in targets:
+            break
+        for candidate in ((x-1,y),(x+1,y),(x,y-1),(x,y+1)):
+            if candidate in ink and candidate not in visited:
+                visited.add(candidate)
+                queue.append(candidate)
+    actual = not visited.isdisjoint(targets)
+    if actual != connected:
+        raise NeedsReview(f"phone-size path is {'connected' if actual else 'broken'}, expected {'connected' if connected else 'broken'}")
+    return {"connected":actual,"region_px":[l,t,r,b],"endpoints":[start,end],
+            "endpoint_pixels":[len(sources),len(targets)]}

@@ -12,7 +12,7 @@ from contextlib import nullcontext
 from pathlib import Path
 
 from PIL import Image, ImageChops
-from .claims import region_claim,controlled_transition,count_components
+from .claims import region_claim,controlled_transition,count_components,check_path
 
 from .compose import GRAPHIC_THEMES, compose, controlled_scene, layered_scene, make_cutout, point_of
 from .grounding import NeedsReview, derive_edge, resolve
@@ -387,6 +387,10 @@ def run(root, session, job, backend):
                     with Image.open(composed) as visible:
                         proof["component_counts"]=[count_components(visible,c["region"],c["rgb"],
                             c["minimum_pixels"],c["expected"],c.get("extent_px")) for c in req["component_claims"]]
+                if req.get("path_claims"):
+                    with Image.open(composed) as visible:
+                        proof["path_checks"]=[check_path(visible,c["region"],c["rgb"],c["start"],c["end"],
+                            c["connected"]) for c in req["path_claims"]]
                 stage = "composed_review"
                 observation_specs = req["composed_checks"]
                 if observation_specs:

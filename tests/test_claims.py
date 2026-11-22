@@ -141,3 +141,24 @@ def test_polygon_illustration_retains_part_pixels(tmp_path):
     compose(src,[glyph],"",{}, {},size,out,tmp_path/"layer.png",theme="paper")
     with Image.open(out) as im:
         assert im.getpixel((144,190))==(191,77,49) and im.getpixel((8,13))!=(191,77,49)
+
+
+def test_phone_path_checks_both_endpoints_not_merely_similar_ink():
+    from PIL import ImageDraw
+    from storyboard_renderer.claims import check_path
+
+    ink=(72,37,54)
+    img=Image.new("RGB",(360,640),"ivory")
+    d=ImageDraw.Draw(img)
+    d.line([(72,256),(144,256),(144,282)], fill=ink, width=4)
+    d.line([(153,256),(288,256)],fill=ink,width=4)
+    args=(img,(.1,.35,.9,.46),ink,(.2,.4),(.8,.4))
+    assert not check_path(*args,False)["connected"]
+    with pytest.raises(NeedsReview,match="broken"):
+        check_path(*args,True)
+    d.line([(144,256),(153,256)],fill=ink,width=4)
+    assert check_path(*args,True)["connected"]
+    with pytest.raises(NeedsReview,match="connected"):
+        check_path(*args,False)
+    with pytest.raises(NeedsReview,match="endpoints"):
+        check_path(img,(.1,.35,.9,.46),ink,(.2,.4),(.8,.44),False)
