@@ -11,7 +11,8 @@ import time
 from contextlib import nullcontext
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageChops
+from .claims import region_claim
 
 from .compose import GRAPHIC_THEMES, compose, controlled_scene, layered_scene, make_cutout, point_of
 from .grounding import NeedsReview, derive_edge, resolve
@@ -125,7 +126,8 @@ def run(root, session, job, backend):
     last_composition_source = None
     active_overlays = req["overlays"]
     gpu = ((req["op"] not in ("overlay_only","focus") and not req.get("paper_scene"))
-           or any(req.get(key) for key in ("clean_checks","composed_checks","anchors")))
+           or any(req.get(key) for key in ("clean_checks","composed_checks","anchors","action_claim"))
+           or any(item.get("part_target") for options in [req["overlays"],*req["overlay_repairs"]] for item in options))
     LEASE.parent.mkdir(parents=True, exist_ok=True)
     with (LEASE.open("a") if gpu else nullcontext()) as lock:
         if lock is not None:
@@ -136,8 +138,9 @@ def run(root, session, job, backend):
                 raise NeedsReview("panel review/repair exceeded its wall-time budget")
             attempt = job / f"attempt-{trial}"
             attempt.mkdir()
-            proof = {"attempt": trial, "feedback": feedback}
+            proof = {"attempt": trial, "feedback": feedback, "outcome":"running"}
             report["attempts"].append(proof)
+            atomic(job/"review.json",report)
             clean, composed = attempt / "clean.png", attempt / "composed.png"
             overlay, phone = attempt / "overlay.png", attempt / "phone.png"
             stage = "art"
@@ -265,6 +268,19 @@ def run(root, session, job, backend):
                         failures.extend(d["detail"] for d in defects)
                     if failures:
                         raise NeedsReview("; ".join(failures))
+                if req.get("action_claim") and not recompose_only:
+                    stage="action_inspection"
+                    with Image.open(ref) as old,Image.open(clean) as new:
+                        if old.size==new.size and ImageChops.difference(old.convert("RGB"),new.convert("RGB")).getbbox() is None:
+                            raise NeedsReview("claimed action changed no clean scene pixels")
+                    views=[("Before clean frame",str(ref)),("After clean frame",str(clean))]
+                    backend.free()
+                    observed=evaluate([simple_query(views,"Describe only visible changes to the depicted subjects and their positions, not text.")])
+                    proof["action_observed"]=observed
+                    answered=evaluate([simple_query(views,f"Did the depicted change actually happen, without substituting just a label? Claim: {req['action_claim']} Give yes or no.")])
+                    proof["action_verdict"]=answered
+                    if parsed(answered[0]).get("answer","").strip().casefold().rstrip(".")!="yes":
+                        raise NeedsReview("before/after evidence does not support the depicted action")
                 stage = "grounding"
                 if req["anchors"] and not recompose_only:
                     backend.free()
@@ -288,10 +304,41 @@ def run(root, session, job, backend):
                 proof["overlays"] = active_overlays
                 compose(clean, overlays, "", s["values"], anchors, size, composed, overlay,
                         theme=s.get("graphic_theme"))
+                proof["part_checks"]=[]
                 with Image.open(overlay) as rgba:
                     proof["geometry"] = geometry({**req, "overlays": active_overlays}, anchors, size, rgba.getchannel("A"))
+                    with Image.open(clean) as src:
+                        base=src.convert("RGB").resize(size,Image.Resampling.LANCZOS)
+                    for glyph in overlays:
+                        if glyph.target_region:
+                            proof["part_checks"].append(region_claim(base,rgba.getchannel("A"),
+                                point_of(glyph.to,anchors,size),glyph.target_region,glyph.target_rgb))
                 with Image.open(composed) as img:
                     img.resize((360, 640), Image.Resampling.LANCZOS).save(phone)
+                stage="part_inspection"
+                named=[o for o in overlays if o.part_target]
+                if named:
+                    if len(named)!=1:
+                        raise NeedsReview("semantic part inspection requires one focused arrow per panel")
+                    glyph=named[0]
+                    tip=point_of(glyph.to,anchors,size)
+                    margin=round(size[0]*.19)
+                    crop=attempt/"arrow-tip.png"
+                    with Image.open(composed) as im:
+                        im.crop((max(0,tip[0]-margin),max(0,tip[1]-margin),
+                                 min(size[0],tip[0]+margin),min(size[1],tip[1]+margin))).save(crop)
+                    backend.free()
+                    views=[[("Cropped arrow endpoint",str(crop))],[("Actual phone frame",str(phone))]]
+                    observations=evaluate([simple_query(x,"What visible part precisely touches the arrowhead tip? Name only that part, not the parent object.") for x in views])
+                    proof["part_observations"]=observations
+                    verdict=evaluate([simple_query(x,f"Does the tip physically touch the {glyph.part_target}, rather than an adjoining part? Answer yes only if clear; otherwise no.") for x in views])
+                    proof["part_verdict"]=verdict
+                    if any(parsed(v).get("answer","").strip().casefold().rstrip(".")!="yes" for v in verdict):
+                        raise NeedsReview(f"composited arrow tip does not clearly touch {glyph.part_target} in both views")
+                stage="fact_inspection"
+                from .fact_evidence import inspect_facts
+                facts=inspect_facts(base,composed,overlays,s["values"],anchors,size,s.get("graphic_theme"),attempt)
+                proof["facts"]=facts
                 stage = "composed_review"
                 observation_specs = req["composed_checks"]
                 if observation_specs:
@@ -302,20 +349,23 @@ def run(root, session, job, backend):
                     if failures:
                         raise NeedsReview("; ".join(failures))
                 report.update(anchors=anchors, clean_sha256=sha(clean), composed_sha256=sha(composed),
-                              accepted_attempt=trial, seconds=round(time.monotonic()-started, 3))
+                              accepted_attempt=trial, verified_facts=facts, seconds=round(time.monotonic()-started, 3))
+                proof["outcome"]="accepted"
+                if trial:
+                    proof["repair_action"]="alternate overlay on same clean art" if recompose_only else "new candidate with previous diagnostic"
                 for path in (clean, composed, overlay, phone):
                     shutil.copyfile(path, job / path.name)
                 atomic(job / "review.json", report)
                 return report
             except (NeedsReview, ValueError, KeyError) as exc:
                 feedback = str(exc)
-                proof.update(stage=stage, defect=feedback)
+                proof.update(stage=stage, defect=feedback,outcome="rejected")
                 for path in (clean, composed, overlay, phone):
                     if path.exists():
                         shutil.copyfile(path, job / path.name)
                 atomic(job / "review.json", report)
                 options = req.get("overlay_repairs", [])
-                if stage in ("composition", "composed_review") and repair_index < len(options):
+                if stage in ("composition", "composed_review","part_inspection","fact_inspection") and repair_index < len(options):
                     active_overlays = options[repair_index]
                     repair_index += 1
                     continue
@@ -323,8 +373,12 @@ def run(root, session, job, backend):
                 if req["fallback_layout"] and not layout:
                     layout = req["fallback_layout"]
                     continue
-                if req["op"] == "overlay_only" and not req["anchors"] and not req.get("overlay_repairs"):
+                if req["op"] == "overlay_only" and repair_index>=len(options):
                     break
+            except Exception as exc:
+                proof.update(stage=stage,defect=f"{type(exc).__name__}: {exc}",outcome="failed")
+                atomic(job/"review.json",report)
+                raise
             finally:
                 if gpu:
                     backend.free()

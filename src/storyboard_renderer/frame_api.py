@@ -103,10 +103,13 @@ class Panel(Strict):
     clear_of: list[str] = Field(default_factory=list)
     focus: Focus | None = None
     paper_scene: bool = False
+    action_claim: str | None = Field(default=None,min_length=3,max_length=400)
     retry_budget: int = Field(default=2, ge=0, le=4)
 
     @model_validator(mode="after")
     def validate_panel(self):
+        if self.action_claim and self.op!="edit_scene":
+            raise ValueError("a depicted action requires an edit_scene, not only an annotation")
         if (self.op == "new_scene") == bool(self.parent_panel_id):
             raise ValueError("new_scene forbids a parent; edits/reveals require one")
         if (self.op == "focus") != bool(self.focus):
@@ -282,6 +285,9 @@ def status(sid: str, pid: str):
     if (p / "review.json").exists():
         report = read(p / "review.json")
         d["summary"] = {k: report[k] for k in ("clean_sha256", "composed_sha256", "scene_root", "anchors") if k in report}
+        for k in ("verified_facts","accepted_attempt"):
+            if k in report:
+                d["summary"][k]=report[k]
         d["attempt_artifacts"] = [
             {name: f"{d['status_url']}/attempts/{index}/{name}" for name in ("clean.png", "composed.png", "phone.png", "overlay.png")
              if (p / f"attempt-{index}" / name).is_file()}

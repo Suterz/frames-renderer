@@ -35,9 +35,21 @@ class Overlay(BaseModel):
     extent: tuple[float,float] | None = None
     ink: Literal["ink","accent","pale"] = "ink"
     role: Literal["question","value","support"] | None = None
+    fact: str | None = Field(default=None, pattern=r"^[a-zA-Z][\w.-]{0,63}$")
+    part_target: str | None = Field(default=None,min_length=3,max_length=200)
+    target_region: tuple[float,float,float,float] | None = None
+    target_rgb: tuple[int,int,int] | None = None
 
     @model_validator(mode="after")
     def valid_graphic(self):
+        if (self.part_target or self.target_region or self.target_rgb) and self.type!="arrow":
+            raise ValueError("part claims apply to arrows")
+        if bool(self.target_region)!=bool(self.target_rgb):
+            raise ValueError("deterministic part checking requires a region and source color")
+        if self.target_region:
+            l,t,r,b=self.target_region
+            if not (0<=l<r<=1 and 0<=t<b<=1 and all(0<=v<=255 for v in self.target_rgb)):
+                raise ValueError("invalid authored target region or RGB")
         if self.type == "shape" and (not self.shape or not self.extent or not all(0 < v <= .9 for v in self.extent)):
             raise ValueError("shape needs a valid normalized extent")
         if self.type == "segment" and (self.source is None or self.to is None):
