@@ -120,6 +120,7 @@ class Panel(Strict):
     action_claim: str | None = Field(default=None,min_length=3,max_length=400)
     require_fact_ids: list[str] = Field(default_factory=list,max_length=24)
     moved_instances: list[str] = Field(default_factory=list,max_length=12)
+    inserted_instances: list[str] = Field(default_factory=list,max_length=12)
     component_claims: list[ComponentClaim] = Field(default_factory=list,max_length=8)
     retry_budget: int = Field(default=2, ge=0, le=4)
 
@@ -128,12 +129,12 @@ class Panel(Strict):
         if self.action_claim and self.op!="edit_scene":
             raise ValueError("a depicted action requires an edit_scene, not only an annotation")
         if self.op=="layout_transition":
-            if not self.layout or not self.layout.get("layers") or not self.moved_instances:
-                raise ValueError("layout transition needs layers and named moving instances")
+            if not self.layout or not self.layout.get("layers") or not (self.moved_instances or self.inserted_instances):
+                raise ValueError("layout transition needs layers and named moving or inserted instances")
             if any(layer.get("allow_overlap") for layer in self.layout["layers"] if isinstance(layer,dict)):
                 raise ValueError("layout transition requires unobscured cutouts")
-        elif self.moved_instances:
-            raise ValueError("moved instances require a layout transition")
+        elif self.moved_instances or self.inserted_instances:
+            raise ValueError("controlled instance changes require a layout transition")
         if (self.op == "new_scene") == bool(self.parent_panel_id):
             raise ValueError("new_scene forbids a parent; edits/reveals require one")
         if (self.op == "focus") != bool(self.focus):

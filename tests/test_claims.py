@@ -100,3 +100,20 @@ def test_count_preserves_separation_and_rejects_an_extra_counter():
     draw.ellipse((252,200,270,218),fill=ink)
     with pytest.raises(NeedsReview,match="4 visible"):
         count_components(a,(.14,.2,.85,.5),ink,80,3)
+
+
+def test_insertion_requires_a_new_visible_cutout_and_keeps_old_ones(tmp_path):
+    from storyboard_renderer.compose import layered_scene
+    from storyboard_renderer.claims import controlled_transition
+    assets={"book":Image.new("RGBA",(30,50),(20,88,120,255))}
+    old=[{"id":"one","asset":"book","center":[.25,.4],"width":.15}]
+    new=old+[{"id":"two","asset":"book","center":[.55,.4],"width":.15}]
+    a=tmp_path/"before.png"; b=tmp_path/"after.png"
+    aa=layered_scene((360,640),assets,old,{},a)
+    bb=layered_scene((360,640),assets,new,{},b)
+    with Image.open(a) as start,Image.open(b) as end:
+        assert "inserted_bbox" in controlled_transition(start,end,aa,bb,[],["two"])["two"]
+        with pytest.raises(NeedsReview):
+            controlled_transition(start,start,aa,bb,[],["two"])
+        with pytest.raises(NeedsReview):
+            controlled_transition(start,end,aa,bb,[],[])

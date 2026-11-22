@@ -40,13 +40,13 @@ def movement(before, after, source_box, destination_box, rgb, threshold=.22):
     return {"source_before":old_source,"source_after":new_source,"destination_before":old_dest,"destination_after":new_dest}
 
 
-def controlled_transition(before,after,old_anchors,new_anchors,changed):
-    """Verify existing recognizable cutouts move, with unchanged scale and orientation."""
+def controlled_transition(before,after,old_anchors,new_anchors,changed,inserted=()):
+    """Verify a declared insertion or movement against actual raster patches."""
     snapshots=lambda src:{k.removesuffix(".center"):v for k,v in src.items()
           if k.endswith(".center") and v.get("method")=="controlled geometry" and v.get("asset")}
     a,b=snapshots(old_anchors),snapshots(new_anchors)
-    if not a or a.keys()!=b.keys() or not set(changed)<=a.keys():
-        raise NeedsReview("controlled movement requires the same named instances before and after")
+    if not a or set(b)-set(a)!=set(inserted) or set(a)-set(b) or not set(changed)<=a.keys():
+        raise NeedsReview("controlled transition changed the named instances beyond the declared insertion")
     evidence={}
     for k,old in a.items():
         new=b[k]
@@ -64,6 +64,13 @@ def controlled_transition(before,after,old_anchors,new_anchors,changed):
             raise NeedsReview(f"{k}: unrelated instance unexpectedly moved")
     if ImageChops.difference(before.convert("RGB"),after.convert("RGB")).getbbox() is None:
         raise NeedsReview("clean layout pixels remained unchanged")
+    for key in inserted:
+        box=tuple(b[key]["box"])
+        before_patch=before.crop(box).convert("RGB")
+        after_patch=after.crop(box).convert("RGB")
+        if ImageChops.difference(before_patch,after_patch).getbbox() is None:
+            raise NeedsReview(f"{key}: declared insertion has no visible new pixels")
+        evidence[key]={"inserted_bbox":list(box)}
     return evidence
 
 

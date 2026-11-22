@@ -201,7 +201,8 @@ def run(root, session, job, backend):
                     if req["op"]=="layout_transition":
                         stage="controlled_movement"
                         with Image.open(ref) as old,Image.open(clean) as new:
-                            proof["controlled_motion"]=controlled_transition(old,new,previous["anchors"],anchors,req["moved_instances"])
+                            proof["controlled_motion"]=controlled_transition(old,new,previous["anchors"],anchors,
+                                                req["moved_instances"],req.get("inserted_instances",()))
                 elif req["op"] == "overlay_only":
                     shutil.copyfile(ref, clean)
                     anchors = dict(previous["anchors"])
