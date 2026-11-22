@@ -248,9 +248,10 @@ def compose(clean_path: Path, overlays: list, caption: str, values: dict, anchor
                 preference={None:.048,"question":.060,"support":.041,"value":.063}
                 min_pt=max(12,round(w*.028)) if item.role else 28
                 max_pt=max(min_pt,round(w*preference[item.role]))
+                max_local_width=min(w*.82,2*min(center[0]-w*.07,w*.93-center[0]))
                 for pt in range(max_pt,min_pt-1,-1):
                     font=font_for(text,pt)
-                    if draw.textlength(text,font=font)<=w*.82:
+                    if draw.textlength(text,font=font)<=max_local_width:
                         break
                 else:
                     raise NeedsReview(f"instructional text too wide at phone-legible size: {text!r}")

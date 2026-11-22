@@ -32,3 +32,13 @@ def test_moving_annotation_is_not_motion_even_with_changed_composite():
     ImageDraw.Draw(decoy).rectangle((60,30,75,45),fill="red")
     with pytest.raises(NeedsReview,match="did not visibly move"):
         movement(old,decoy,*boxes,token)
+
+
+def test_exact_label_next_to_wide_diagram_fits_its_own_safe_region(tmp_path):
+    from storyboard_renderer.compose import compose
+    from storyboard_renderer.schema import Overlay
+    raw=tmp_path/"raw.png";Image.new("RGB",(1080,1920),"white").save(raw)
+    label=Overlay(type="text",at=[.78,.66],text="2 DISTANCES",role="value")
+    dest=tmp_path/"out.png"; mask=tmp_path/"mask.png"
+    compose(raw,[label],"",{}, {},(1080,1920),dest,mask,theme="paper")
+    assert Image.open(mask).getchannel("A").getbbox()[2]<1020
