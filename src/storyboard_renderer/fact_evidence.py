@@ -14,15 +14,22 @@ def inspect_facts(base, composed, overlays, values, anchors, size, theme, dest):
         return {}
     if len({o.fact for o in required})!=len(required):
         raise NeedsReview("named visual facts must be unique in each panel")
-    bg=phone(base)
     with Image.open(composed) as im:
         actual=phone(im)
     source=dest/"fact-base.png"
     base.save(source)
     results={}
-    for o in required:
+    for index,o in enumerate(overlays):
+        if not o.fact:
+            continue
         view=dest/f"fact-{o.fact}.png"
-        compose(source,[o],"",values,anchors,size,view,dest/f"fact-{o.fact}-mask.png",theme=theme)
+        bg_file=dest/"fact-prefix.png"
+        # Use the actual layout *under this mark*. Sampling only over blank
+        # paper invents different anti-aliased edge colors over filled regions.
+        compose(source,overlays[:index],"",values,anchors,size,bg_file,dest/"fact-prefix-mask.png",theme=theme)
+        with Image.open(bg_file) as im:
+            bg=phone(im)
+        compose(source,overlays[:index+1],"",values,anchors,size,view,dest/f"fact-{o.fact}-mask.png",theme=theme)
         with Image.open(view) as im:
             expected=phone(im)
         box=ImageChops.difference(expected,bg).getbbox()

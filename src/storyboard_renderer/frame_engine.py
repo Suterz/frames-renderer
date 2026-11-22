@@ -125,6 +125,8 @@ def run(root, session, job, backend):
     repair_index = 0
     last_composition_source = None
     active_overlays = req["overlays"]
+    reanchor = None
+    regrounded = set()
     gpu = ((req["op"] not in ("overlay_only","focus") and not req.get("paper_scene"))
            or any(req.get(key) for key in ("clean_checks","composed_checks","anchors","action_claim"))
            or any(item.get("part_target") for options in [req["overlays"],*req["overlay_repairs"]] for item in options))
@@ -298,6 +300,24 @@ def run(root, session, job, backend):
                     for name, spec in req["anchors"].items():
                         if isinstance(spec, dict):
                             anchors[name] = derive_edge(anchors[spec["of"]], anchors[spec["toward"]], spec["of"], spec["toward"])
+                if reanchor:
+                    key,description=reanchor
+                    stage="targeted_regrounding"
+                    reanchor=None
+                    backend.free()
+                    with Image.open(clean) as im:
+                        w,h=im.size
+                    fix=resolve(clean,key,description,attempt/"repair-grounding")
+                    x,y=fix["point"]
+                    if not (0<=x<w and 0<=y<h):
+                        raise NeedsReview("re-grounded part is outside the clean scene")
+                    fix["point"]=[round(x*size[0]/w),round(y*size[1]/h)]
+                    fix["box"]=[round(v*size[i%2]/(w,h)[i%2]) for i,v in enumerate(fix["box"])]
+                    fix["source_hash"]=sha(clean)
+                    # Keep the established query searchable in later beats.
+                    fix["description"]=anchors[key]["description"]
+                    anchors[key]=fix
+                    proof["regrounded_part"]=key
                 stage = "composition"
                 overlays = [Overlay.model_validate(o) for o in active_overlays]
                 last_composition_source = (clean, anchors.copy())
@@ -371,7 +391,8 @@ def run(root, session, job, backend):
                               accepted_attempt=trial, verified_facts=facts, seconds=round(time.monotonic()-started, 3))
                 proof["outcome"]="accepted"
                 if trial:
-                    proof["repair_action"]="alternate overlay on same clean art" if recompose_only else "new candidate with previous diagnostic"
+                    proof["repair_action"]=("re-grounded one part on unchanged clean art" if "regrounded_part" in proof else
+                        "alternate overlay on same clean art" if recompose_only else "new candidate with previous diagnostic")
                 for path in (clean, composed, overlay, phone):
                     shutil.copyfile(path, job / path.name)
                 atomic(job / "review.json", report)
@@ -388,6 +409,17 @@ def run(root, session, job, backend):
                     active_overlays = options[repair_index]
                     repair_index += 1
                     continue
+                if stage=="part_inspection" and last_composition_source and trial<req["retry_budget"]:
+                    exact=next((o for o in overlays if o.part_target and isinstance(o.to,str)),None)
+                    if exact and exact.to not in regrounded and anchors.get(exact.to,{}).get("description"):
+                        regrounded.add(exact.to)
+                        focus=("a point comfortably inside the open region, away from all visible boundaries"
+                               if exact.part_relation=="inside_region" else
+                               "a point well inside the part itself, not its edge, attached part or neighboring part")
+                        reanchor=(exact.to,f"{anchors[exact.to]['description']}. Use {focus}. If absent, refuse.")
+                        proof["next_repair"]={"type":"targeted_regrounding","anchor":exact.to}
+                        atomic(job/"review.json",report)
+                        continue
                 last_composition_source = None
                 if req["fallback_layout"] and not layout:
                     layout = req["fallback_layout"]

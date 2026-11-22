@@ -42,3 +42,22 @@ def test_exact_label_next_to_wide_diagram_fits_its_own_safe_region(tmp_path):
     dest=tmp_path/"out.png"; mask=tmp_path/"mask.png"
     compose(raw,[label],"",{}, {},(1080,1920),dest,mask,theme="paper")
     assert Image.open(mask).getchannel("A").getbbox()[2]<1020
+
+
+def test_named_ticks_detected_over_colored_area_but_not_if_overpainted(tmp_path):
+    from storyboard_renderer.compose import compose
+    from storyboard_renderer.schema import Overlay
+    from storyboard_renderer.fact_evidence import inspect_facts
+    sz=(1080,1920)
+    base=Image.new("RGB",sz,"#edf6f8")
+    source=tmp_path/"source.png";base.save(source)
+    paint=Overlay(type="shape",shape="rect",at=[.5,.4],extent=[.55,.3],ink="accent")
+    tick=Overlay(type="segment",fact="tick",to=[.36,.49],ink="ink",**{"from":[.36,.29]})
+    out=tmp_path/"out.png"
+    for glyphs in ([paint,tick],[paint,tick,paint]):
+        compose(source,glyphs,"",{}, {},sz,out,tmp_path/"mask.png",theme="atlas")
+        if len(glyphs)==2:
+            assert inspect_facts(base,out,glyphs,{}, {},sz,"atlas",tmp_path)["tick"]["visible_fraction"]>.95
+        else:
+            with pytest.raises(NeedsReview,match="obscured"):
+                inspect_facts(base,out,glyphs,{}, {},sz,"atlas",tmp_path)
