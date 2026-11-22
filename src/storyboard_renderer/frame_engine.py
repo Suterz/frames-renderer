@@ -311,8 +311,18 @@ def run(root, session, job, backend):
                         base=src.convert("RGB").resize(size,Image.Resampling.LANCZOS)
                     for glyph in overlays:
                         if glyph.target_region:
-                            proof["part_checks"].append(region_claim(base,rgba.getchannel("A"),
-                                point_of(glyph.to,anchors,size),glyph.target_region,glyph.target_rgb))
+                            # A controlled part may itself be a composed graphic.
+                            # Measure the scene without the arrow, and use that
+                            # arrow's own alpha, never a neighboring overlay's.
+                            backdrop=attempt/"part-without-arrows.png"
+                            compose(clean,[o for o in overlays if o.type!="arrow"],"",s["values"],anchors,size,
+                                    backdrop,attempt/"part-base-alpha.png",theme=s.get("graphic_theme"))
+                            arrow_mask=attempt/"part-arrow-alpha.png"
+                            compose(clean,[glyph],"",s["values"],anchors,size,
+                                    attempt/"part-arrow-only.png",arrow_mask,theme=s.get("graphic_theme"))
+                            with Image.open(backdrop) as underlying,Image.open(arrow_mask) as ink:
+                                proof["part_checks"].append(region_claim(underlying.convert("RGB"),ink.getchannel("A"),
+                                    point_of(glyph.to,anchors,size),glyph.target_region,glyph.target_rgb))
                 with Image.open(composed) as img:
                     img.resize((360, 640), Image.Resampling.LANCZOS).save(phone)
                 stage="part_inspection"
