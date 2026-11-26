@@ -229,7 +229,8 @@ def health():
 @app.get("/ready")
 def ready():
     try:
-        vision_model = Path.home() / "ai/models/vision/qwen3-vl-8b/model.safetensors.index.json"
+        vision_model = Path(os.environ.get("STORY_VISION_MODEL",
+                            Path.home() / "ai/models/vision/qwen3-vl-8b")) / "model.safetensors.index.json"
         vision_python = Path(os.environ.get("STORY_VISION_PYTHON", Path.home() / "venvs/storyboard-vision/bin/python"))
         if not vision_model.is_file() or not vision_python.is_file():
             raise RuntimeError("local vision checkpoint or environment missing")

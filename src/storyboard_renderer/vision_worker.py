@@ -1,12 +1,13 @@
 """Short-lived local Qwen3-VL process; never calls a hosted inference endpoint."""
 from __future__ import annotations
 import json
+import os
 import sys
 from pathlib import Path
 import torch
 from transformers import Qwen3VLForConditionalGeneration, AutoProcessor
 
-model_dir = str(Path.home() / "ai/models/vision/qwen3-vl-8b")
+model_dir = os.environ.get("STORY_VISION_MODEL", str(Path.home() / "ai/models/vision/qwen3-vl-8b"))
 picture, query = sys.argv[1:3]
 model = Qwen3VLForConditionalGeneration.from_pretrained(model_dir, torch_dtype=torch.bfloat16, device_map="auto", attn_implementation="sdpa")
 processor = AutoProcessor.from_pretrained(model_dir)

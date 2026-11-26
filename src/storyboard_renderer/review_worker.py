@@ -1,11 +1,12 @@
 """Short-lived local visual review; returns a proposed answer, not a guarantee."""
+import os
 import sys
 import torch
 from pathlib import Path
 from transformers import Qwen3VLForConditionalGeneration, AutoProcessor
 
 image,question=sys.argv[1:3]
-root=str(Path.home()/"ai/models/vision/qwen3-vl-8b")
+root = os.environ.get("STORY_VISION_MODEL", str(Path.home() / "ai/models/vision/qwen3-vl-8b"))
 model=Qwen3VLForConditionalGeneration.from_pretrained(root,torch_dtype=torch.bfloat16,device_map="auto",attn_implementation="sdpa")
 processor=AutoProcessor.from_pretrained(root)
 messages=[{"role":"user","content":[{"type":"image","image":image},
