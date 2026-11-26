@@ -37,3 +37,4 @@ transforms it into the new composition; the crop does not override a failed
 composed review. A Qwen “accepted” icon can still have distracting details.
 
 For the pinned local installation and GPU rehearsal, see [Rehearsal](docs/REHEARSAL.md).
+For the current status and next step, see [agent context](agent-context.md).

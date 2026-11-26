@@ -12,4 +12,5 @@ outputs/
 *.partial.mp4
 voice-raw.wav
 raw.wav
+examples/*/narration.wav
 .env
