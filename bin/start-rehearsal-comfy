@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+root="${1:?usage: start-rehearsal-comfy /absolute/install/root}"
+comfy="$root/ComfyUI"
+if [[ ! -d "$comfy/.git" ]]; then
+    git clone --depth 1 --branch v0.46.0 https://github.com/Comfy-Org/ComfyUI.git "$comfy"
+fi
+test "$(git -C "$comfy" rev-parse HEAD)" = a277b5bf213e8a44fa34817b7770b54f86ef4cea
+cd "$(dirname "$0")/.."
+python3 -B bin/model-assets.py locks/models.json "$root/models" flux flux-components
+for mapping in \
+    diffusion_models/flux-2-klein-4b.safetensors:flux-2-klein-4b.safetensors \
+    text_encoders/qwen_3_4b.safetensors:split_files/text_encoders/qwen_3_4b.safetensors \
+    vae/flux2-vae.safetensors:split_files/vae/flux2-vae.safetensors; do
+    dest="$comfy/models/${mapping%:*}"
+    target="$root/models/flux/${mapping#*:}"
+    if [[ -e "$dest" ]]; then
+        test "$(realpath "$dest")" = "$target"
+    else
+        ln -s "$target" "$dest"
+    fi
+done
+export HF_HOME="$root/hf-cache" HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
+exec "$root/venvs/comfy-storyboard/bin/python" "$comfy/main.py" --listen 127.0.0.1 \
+    --port "${REPRO_COMFY_PORT:-8193}" --base-directory "$comfy" --disable-all-custom-nodes
