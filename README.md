@@ -35,3 +35,5 @@ worker can choose them after rejection but cannot invent new numbers or
 teaching claims. `focus` crops around an accepted semantic anchor and
 transforms it into the new composition; the crop does not override a failed
 composed review. A Qwen “accepted” icon can still have distracting details.
+
+For the pinned local installation and GPU rehearsal, see [Rehearsal](docs/REHEARSAL.md).
