@@ -72,6 +72,7 @@ def exact(data, size, target):
         names = [meter.get("object") for meter in meters]
         if any(not isinstance(name, str) or not name for name in names) or names[0] == names[1]:
             raise NeedsReview("meter objects must have distinct labels")
+        probes = []
         for i, meter in enumerate(meters):
             x = round(w*(.06+.46*i))
             y = round(h*.20)
@@ -80,18 +81,24 @@ def exact(data, size, target):
                 raise NeedsReview("meter requires one to three readings")
             draw.rounded_rectangle((x,y,x+w*.42,y+h*.55), radius=round(w*.028), outline="#314d5c", width=4)
             label(draw, names[i], x+w*.025, y+h*.025, round(w*.042), w*.37)
+            labels = set()
             for j, reading in enumerate(readings):
                 if (not isinstance(reading, dict)
                         or not all(isinstance(reading.get(key), str) and reading[key] for key in ("label", "display"))
                         or type(reading.get("focus")) is not bool):
                     raise NeedsReview("invalid structured meter reading")
+                if reading["label"] in labels:
+                    raise NeedsReview("a meter cannot contain two readings with the same label")
+                labels.add(reading["label"])
                 yy = y + h*(.11 + .13*j)
+                probes.append({"object": names[i], "label": reading["label"], "display": reading["display"],
+                               "focus": reading["focus"], "point": [(x+w*.39)/w, (yy+h*.05)/h]})
                 if reading["focus"]:
                     draw.rounded_rectangle((x+w*.015,yy-h*.012,x+w*.405,yy+h*.095),
                                            radius=round(w*.015), fill="#ffe0a6")
                 label(draw, reading["label"], x+w*.026, yy, round(w*.033), w*.37)
                 label(draw, reading["display"], x+w*.026, yy+h*.043, round(w*.049), w*.37)
-        proof = {"meters": meters}
+        proof = {"meters": meters, "focus_probes": probes}
     elif operation == "projection":
         vertices = data.get("vertices")
         if not isinstance(vertices, list) or not 3 <= len(vertices) <= 64:
