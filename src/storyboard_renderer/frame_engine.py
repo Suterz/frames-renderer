@@ -438,7 +438,8 @@ def run(root, session, job, backend):
                               accepted_attempt=trial, verified_facts=facts, seconds=round(time.monotonic()-started, 3))
                 proof["outcome"]="accepted"
                 if daily:
-                    report["daily_visual"] = {**proof["daily_visual"], "phone_sha256": sha(phone)}
+                    report["daily_visual"] = {**proof["daily_visual"], "phone_sha256": sha(phone),
+                                              "route_reason": daily.get("route_reason", "")}
                     if daily["kind"] == "authentic":
                         from .daily_visual import approve_discovery
 

@@ -122,6 +122,7 @@ class DailyVisual(Strict):
     data: dict
     obligations: list[dict] = Field(min_length=1, max_length=4)
     claims: list[str] = Field(max_length=8)
+    route_reason: str = Field(default="", max_length=1200)
 
 
 class Panel(Strict):
