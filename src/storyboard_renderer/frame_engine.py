@@ -427,6 +427,11 @@ def run(root, session, job, backend):
                             c["connected"]) for c in req["path_claims"]]
                 stage = "composed_review"
                 observation_specs = req["composed_checks"]
+                if daily and daily["kind"] == "illustration":
+                    observation_specs = [*observation_specs, {"question":
+                        "At this size is there any accidental writing, faux lettering, words, logos or labels "
+                        "baked into the illustration? Answer only yes or no; say yes for illegible pseudo-letters.",
+                        "expected": "no"}]
                 if observation_specs:
                     backend.free()
                     queries = [simple_query([("Composed image", str(p))], c["question"]) for p in (composed, phone) for c in observation_specs]
