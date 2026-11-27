@@ -134,7 +134,8 @@ def run(root, session, job, backend):
 
         original_composition = job / "documentary-clean.png"
         documentary_proof = documentary(daily["data"], size, original_composition)
-    gpu = ((req["op"] not in ("overlay_only","focus") and not req.get("paper_scene"))
+    exact_daily = daily is not None and daily["kind"] == "exact"
+    gpu = ((req["op"] not in ("overlay_only","focus") and not req.get("paper_scene") and not exact_daily)
            or any(req.get(key) for key in ("clean_checks","composed_checks","anchors","action_claim"))
            or any(item.get("part_target") for options in [req["overlays"],*req["overlay_repairs"]] for item in options))
     LEASE.parent.mkdir(parents=True, exist_ok=True)
