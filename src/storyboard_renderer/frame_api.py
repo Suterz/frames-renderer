@@ -117,6 +117,13 @@ class PathClaim(Strict):
         return self
 
 
+class DailyVisual(Strict):
+    kind: Literal["exact", "authentic", "illustration"]
+    data: dict
+    obligations: list[dict] = Field(min_length=1, max_length=4)
+    claims: list[str] = Field(max_length=8)
+
+
 class Panel(Strict):
     key: str = Field(pattern=KEY.pattern)
     op: Literal["new_scene", "edit_scene", "overlay_only", "focus","layout_transition"]
@@ -146,9 +153,12 @@ class Panel(Strict):
     component_claims: list[ComponentClaim] = Field(default_factory=list,max_length=8)
     path_claims: list[PathClaim] = Field(default_factory=list,max_length=6)
     retry_budget: int = Field(default=2, ge=0, le=4)
+    daily: DailyVisual | None = None
 
     @model_validator(mode="after")
     def validate_panel(self):
+        if self.daily and (self.op != "new_scene" or self.layout or self.paper_scene or self.overlays):
+            raise ValueError("daily panels require one independently routed scene")
         if self.action_claim and self.op!="edit_scene":
             raise ValueError("a depicted action requires an edit_scene, not only an annotation")
         if self.op=="layout_transition":
@@ -334,7 +344,7 @@ def status(sid: str, pid: str):
     if (p / "review.json").exists():
         report = read(p / "review.json")
         d["summary"] = {k: report[k] for k in ("clean_sha256", "composed_sha256", "scene_root", "anchors") if k in report}
-        for k in ("verified_facts","accepted_attempt"):
+        for k in ("verified_facts","accepted_attempt","daily_visual"):
             if k in report:
                 d["summary"][k]=report[k]
         d["attempt_artifacts"] = [

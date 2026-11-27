@@ -127,6 +127,13 @@ def run(root, session, job, backend):
     active_overlays = req["overlays"]
     reanchor = None
     regrounded = set()
+    daily = req.get("daily")
+    documentary_proof = None
+    if daily and daily["kind"] == "authentic":
+        from .daily_visual import documentary
+
+        original_composition = job / "documentary-clean.png"
+        documentary_proof = documentary(daily["data"], size, original_composition)
     gpu = ((req["op"] not in ("overlay_only","focus") and not req.get("paper_scene"))
            or any(req.get(key) for key in ("clean_checks","composed_checks","anchors","action_claim"))
            or any(item.get("part_target") for options in [req["overlays"],*req["overlay_repairs"]] for item in options))
@@ -223,6 +230,15 @@ def run(root, session, job, backend):
                             anchors[name] = {**val, "point": points, "box": bounds, "crop_from": val["point"],
                                              "method": "composition crop of previously accepted anchor", "source_hash": sha(clean)}
                     proof["focus_canvas_crop"] = [x0,y0,x1,y1]
+                elif documentary_proof:
+                    shutil.copyfile(original_composition, clean)
+                    proof["daily_visual"] = {**documentary_proof}
+                    anchors = {}
+                elif daily and daily["kind"] == "exact":
+                    from .daily_visual import exact
+
+                    proof["daily_visual"] = exact(daily["data"], size, clean)
+                    anchors = {}
                 elif req.get("paper_scene"):
                     palette=GRAPHIC_THEMES.get(s.get("graphic_theme"),GRAPHIC_THEMES["paper"])
                     Image.new("RGB",size,palette["paper"]).save(clean)
@@ -243,6 +259,8 @@ def run(root, session, job, backend):
                         prompt += f"\nCorrect these specific defects: {feedback[:700]}"
                     native = (864, 1536) if backend.profile == "flux" else (1440, 2560)
                     proof["backend"] = backend.render(prompt, *native, req["seed"] + trial, clean, ref)
+                    if daily:
+                        proof["daily_visual"] = {"route": "flux", "backend": proof["backend"]}
                     anchors = {}
                 stage = "clean_review"
                 images = [("Approved style reference", str(p)) for p in refs]
@@ -254,7 +272,13 @@ def run(root, session, job, backend):
                 checks = req["clean_checks"]
                 queries = [simple_query([images[-1]], c["question"]) for c in checks]
                 rubric = not s["legacy_input"] and not req.get("paper_scene") and req["op"] not in ("overlay_only", "focus","layout_transition")
-                if rubric:
+                if daily and daily["kind"] == "authentic":
+                    queries.append({"images": [("Original photograph preview", str(job / "documentary-original-preview.png")),
+                                               images[-1]], "prompt":
+                        f"Required visible subject: {req['instruction']}. Inspect original and composed views. "
+                        "Report missing subject, unwanted logos, text, watermarks, checkerboard, borders or artifacts. "
+                        'Return JSON {"defects":[{"detail":"pixel defect"}]}. Empty only if clear.'})
+                elif rubric and (not daily or daily["kind"] == "illustration"):
                     queries.append({"images": images, "prompt":
                         f"Teaching objective: {req['objective']}\nImage instruction: "
                         f"{req['instruction'] if not (layout and req['fallback_layout'] == layout) else 'Judge the exact controlled layout by the teaching objective.'}\n"
@@ -268,7 +292,7 @@ def run(root, session, job, backend):
                     backend.free()
                     proof["pass_a"] = records = evaluate(queries)
                     failures = check_answers(records[:len(checks)], checks)
-                    if rubric:
+                    if len(queries) > len(checks):
                         defects = parsed(records[-1]).get("defects")
                         if not isinstance(defects, list):
                             raise ValueError("missing defects list")
@@ -350,6 +374,16 @@ def run(root, session, job, backend):
                                     point_of(glyph.to,anchors,size),glyph.target_region,glyph.target_rgb))
                 with Image.open(composed) as img:
                     img.resize((360, 640), Image.Resampling.LANCZOS).save(phone)
+                if daily and daily["kind"] == "authentic":
+                    records = evaluate([{"images": [("Phone frame", str(phone))], "prompt":
+                        f"Can the viewer see the required subject clearly at this size? {req['instruction']}. "
+                        'Return only {"answer":"yes"} if clearly visible or {"answer":"no"} '
+                        "if obscured or uncertain."}])
+                    proof["daily_visual"]["phone_review"] = records
+                    raw = records[0]["raw"].strip()
+                    answer = raw if raw.casefold() in {"yes", "no"} else parsed(records[0]).get("answer", "")
+                    if str(answer).casefold().strip() != "yes":
+                        raise NeedsReview("documentary subject cannot be established at phone size")
                 stage="part_inspection"
                 named=[o for o in overlays if o.part_target]
                 if named:
@@ -403,6 +437,12 @@ def run(root, session, job, backend):
                 report.update(anchors=anchors, clean_sha256=sha(clean), composed_sha256=sha(composed),
                               accepted_attempt=trial, verified_facts=facts, seconds=round(time.monotonic()-started, 3))
                 proof["outcome"]="accepted"
+                if daily:
+                    report["daily_visual"] = {**proof["daily_visual"], "phone_sha256": sha(phone)}
+                    if daily["kind"] == "authentic":
+                        from .daily_visual import approve_discovery
+
+                        approve_discovery(report["daily_visual"])
                 if trial:
                     proof["repair_action"]=("re-grounded one part on unchanged clean art" if "regrounded_part" in proof else
                         "alternate overlay on same clean art" if recompose_only else "new candidate with previous diagnostic")
