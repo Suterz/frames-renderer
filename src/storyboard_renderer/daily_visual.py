@@ -97,7 +97,12 @@ def exact(data, size, target):
                     draw.rounded_rectangle((x+w*.015,yy-h*.012,x+w*.405,yy+h*.095),
                                            radius=round(w*.015), fill="#ffe0a6")
                 label(draw, reading["label"], x+w*.026, yy, round(w*.033), w*.37)
-                label(draw, reading["display"], x+w*.026, yy+h*.043, round(w*.049), w*.37)
+                size_pt = round(w*.049)
+                # A worked equation needs more horizontal space than a scalar
+                # reading, while still being legible in the phone-size export.
+                if " = " in reading["display"]:
+                    size_pt = round(w*.034)
+                label(draw, reading["display"], x+w*.026, yy+h*.043, size_pt, w*.37)
         proof = {"meters": meters, "focus_probes": probes}
     elif operation == "projection":
         vertices = data.get("vertices")
